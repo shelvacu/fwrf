@@ -1,0 +1,2 @@
+* implement sacred chars with a copy of the initial array, and go NULL_CHAR -> sacred char
+* cache the hash values for each row/col for potentially faster hashing 
