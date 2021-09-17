@@ -72,6 +72,7 @@ dependencies = [
 [[package]]
 name = "deranged"
 version = "0.2.0"
+source = "git+https://github.com/shelvacu/deranged?branch=array-indexes#fa8f7be2f7473062974da168754b9d541e15e681"
 
 [[package]]
 name = "devtimer"
@@ -141,9 +142,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-width"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9337591893a19b88d8d87f2cec1e73fad5cdfd10e5a6f349f498ad6ea2ffb1e3"
+checksum = "3ed742d4ea2bd1176e236172c8429aaf54486e7ac098db29ffe6529e0ce50973"
 
 [[package]]
 name = "vec_map"

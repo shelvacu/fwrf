@@ -186,13 +186,9 @@ fn main() -> io::Result<()> {
 
         let mut time = devtimer::DevTime::new_simple();
         time.start();
-        // dbg!();
         let a = &*prefix_map_arc;
-        // dbg!();
         let m = MatrixIndex{row: 1usize.try_into().unwrap(), col: 0usize.try_into().unwrap()};
-        // dbg!();
         let f = |ca| m2w_tx.send(ca).unwrap();
-        // dbg!();
         compute(
             a,
             *template,
@@ -258,12 +254,10 @@ where
     'each_word: for w in wordlist {
         let s:&str = w.as_ref();
         let chars = s.chars().map(|c| c.to_ascii_lowercase()).collect():Vec<_>;
-        if s == "icbms" || s == "items" { dbg!(s,&chars); }
         each_unique_dimension!(dim, {
             if chars.len() == dim::size() {
                 let mut w:dim::Word = Default::default();
                 for i in dim::cross::Index::all_values() {
-                    if s == "items" { dbg!(i, w); }
                     match chars[i.into():usize].try_into() {
                         Err(e) => {
                             if !ignore_unencodeable {
@@ -282,16 +276,10 @@ where
                 }
                 word_counts[dim::DIMENSION_ID] += 1;
                 for c in &*w { assert_ne!(*c, NULL_CHAR); }
-                if s == "items" { dbg!(w); }
                 for &template in dim::index_tuple(&word_templates) {
                     if template.is_match(w) {
                         let p = w.prefixes(template);
-                        if s == "items" { dbg!(&p); }
                         for (prefix,c) in p {
-                            if prefix == "icb**".try_into().unwrap() {
-                            // if s == "items" {
-                                dbg!(w,prefix,c,template);
-                            }
                             dim::prefix_map_mut(&mut res).entry(prefix).or_default().set(c);
                         }
                     }
