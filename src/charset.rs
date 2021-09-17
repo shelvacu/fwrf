@@ -23,14 +23,14 @@ impl CharSet {
         (self.0 & (1 << inner)) > 0
     }
 
-    pub fn iter(self) -> impl Iterator<Item = EncodedChar> {
-        CharSetRanged::all_values().filter_map(move |c| {
-            let e:EncodedChar = c.into();
-            if self.has(e) {
-                Some(e)
-            } else { None }
-        })
-    }
+    // pub fn iter(self) -> impl Iterator<Item = EncodedChar> {
+    //     CharSetRanged::all_values().filter_map(move |c| {
+    //         let e:EncodedChar = c.into();
+    //         if self.has(e) {
+    //             Some(e)
+    //         } else { None }
+    //     })
+    // }
 
     #[must_use]
     pub fn and(self, other: CharSet) -> CharSet {

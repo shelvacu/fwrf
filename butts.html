@@ -1,0 +1,20 @@
+<html>
+<body>
+    <!-- butts-opera-april-reset-dress -->
+    <table style="font-family: sans-serif;text-align: center;font-weight: bold;line-height: 0.7;">
+        <tbody id="the-thing">
+        </tbody>
+    </table>
+    <script>
+        let the_thing = document.getElementById("the-thing");
+        window.location.search.slice(1).split("-").forEach(word => {
+            let tr = document.createElement("tr");
+            word.split("").forEach(c => {
+                let td = document.createElement("td");
+                td.innerText = c.toUpperCase();
+                tr.appendChild(td);
+            });
+            the_thing.appendChild(tr);
+        });
+    </script>
+</body>

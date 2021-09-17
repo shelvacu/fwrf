@@ -13,9 +13,9 @@ crossbeam-channel = "0.5"
 devtimer = "4.0"
 
 [dependencies.deranged]
-git = "https://github.com/shelvacu/deranged"
-branch = "array-indexes"
-#path = "../deranged"
+#git = "https://github.com/shelvacu/deranged"
+#branch = "array-indexes"
+path = "../deranged"
 default-features = false
 features = ["std"]
 
@@ -32,6 +32,7 @@ panic = 'abort'
 [features]
 do-debug = []
 unchecked = ["deranged/unsafe-range-assert"]
+btreemap = []
 # To indicate that width is the same as height.
 square = []
 

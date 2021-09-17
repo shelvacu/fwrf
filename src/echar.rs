@@ -1,9 +1,16 @@
 use core::convert::TryFrom;
+use core::fmt;
 
 use crate::config::*;
 
-#[derive(PartialEq,Eq,PartialOrd,Ord,Debug,Copy,Clone,Hash)]
+#[derive(PartialEq,Eq,PartialOrd,Ord,Copy,Clone,Hash)]
 pub struct EncodedChar(u8);
+
+impl fmt::Debug for EncodedChar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "E{}", (*self).into():char)
+    }
+}
 
 impl Default for EncodedChar {
     fn default() -> Self {
@@ -14,6 +21,11 @@ impl Default for EncodedChar {
 impl EncodedChar {
     pub fn inner(self) -> usize {
         self.0.into()
+    }
+
+    // Two EncodedChars "match" if either is NULL_CHAR or they are equal. 
+    pub fn is_match(self, other: Self) -> bool {
+        self == NULL_CHAR || other == NULL_CHAR || self == other
     }
 
     #[must_use]
@@ -40,6 +52,7 @@ macro_rules! encoded_char_impls {
                     $(
                         $char => Ok(Self($codepoint)),
                     )*
+                    '*' => Ok(NULL_CHAR),
                     _ => Err("Invalid char for EncodedChar")
                 }
             }
@@ -65,7 +78,7 @@ macro_rules! encoded_char_impls {
                         EncodedChar($codepoint) => $char,
                     )*
                     EncodedChar(c) if (c as usize) == CHAR_SET_SIZE + 1 => '$',
-                    NULL_CHAR => '␀',
+                    NULL_CHAR => '*',
                     _ => '*',
                 }
             }

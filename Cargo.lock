@@ -72,7 +72,6 @@ dependencies = [
 [[package]]
 name = "deranged"
 version = "0.2.0"
-source = "git+https://github.com/shelvacu/deranged?branch=array-indexes#57895ff3ce559092abdd6f045510f91111380279"
 
 [[package]]
 name = "devtimer"

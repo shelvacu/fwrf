@@ -1,6 +1,7 @@
-use std::cmp::Ordering;
-use std::ops::{Index, IndexMut};
-use std::convert::TryInto;
+use core::convert::{TryFrom, TryInto};
+use core::cmp::Ordering;
+use core::ops::{Index, IndexMut};
+use core::fmt;
 
 use fnv::FnvHashMap;
 
@@ -8,8 +9,74 @@ use crate::config::*;
 use crate::echar::*;
 use crate::charset::CharSet;
 
-#[derive(PartialEq,Eq,PartialOrd,Ord,Debug,Copy,Clone,Hash)]
-pub struct Word<const N:usize>([EncodedChar; N]);
+#[derive(PartialEq,Eq,PartialOrd,Ord,Copy,Clone,Hash)]
+pub struct Word<const N:usize>(pub [EncodedChar; N]);
+
+impl<const N:usize> fmt::Debug for Word<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "W{}({})", N, self.0.iter().map(|e| (*e).into():char).collect():String)
+    }
+}
+
+impl<const N:usize> Word<N> {
+    pub fn is_match(self, other: Self) -> bool {
+        IntoIterator::into_iter(self.0.zip(other.0)).all(|(a,b)| a.is_match(b))
+    }
+
+    pub fn prefixes(self, pattern: Self) -> Vec<(Self, EncodedChar)> {
+        let mut mod_self = self;
+        let mut res = Vec::new();
+        for i in (0..N).rev() {
+            if pattern[i] == NULL_CHAR {
+                let c = mod_self[i];
+                mod_self[i] = NULL_CHAR;
+                res.push((mod_self, c));
+            } else {
+                assert_eq!(pattern[i], mod_self[i]);
+                assert_eq!(mod_self[i], self[i]);
+            }
+        }
+        res
+    }
+}
+
+#[test]
+fn prefixes_work() {
+    let pattern:Word<4> = "**a*".try_into().unwrap();
+    let word:Word<4> = "star".try_into().unwrap();
+    let mut test_prefixes = word.prefixes(pattern);
+    let mut expected_prefixes:Vec<(Word<4>,EncodedChar)> = vec![
+        ("sta*",'r'),
+        ("s*a*",'t'),
+        ("**a*",'s')
+    ].into_iter().map(|(w,c)| (w.try_into().unwrap(), c.try_into().unwrap())).collect();
+    test_prefixes.sort();
+    expected_prefixes.sort();
+    assert_eq!(test_prefixes, expected_prefixes);
+}
+
+#[test]
+fn prefixes_work_degenerate() {
+    let pattern:Word<4> = "****".try_into().unwrap();
+    let word:Word<4> = "star".try_into().unwrap();
+    let mut test_prefixes = word.prefixes(pattern);
+    let mut expected_prefixes:Vec<(Word<4>,EncodedChar)> = vec![
+        ("sta*",'r'),
+        ("st**",'a'),
+        ("s***",'t'),
+        ("****",'s'),
+    ].into_iter().map(|(w,c)| (w.try_into().unwrap(), c.try_into().unwrap())).collect();
+    test_prefixes.sort();
+    expected_prefixes.sort();
+    assert_eq!(test_prefixes, expected_prefixes);
+}
+
+#[test]
+fn not_match() {
+    let a:Word<5> = "*cb**".try_into().unwrap();
+    let b:Word<5> = "items".try_into().unwrap();
+    assert!(!a.is_match(b));
+}
 
 impl<const N:usize> Default for Word<N> {
     fn default() -> Self {
@@ -28,6 +95,29 @@ impl<const N:usize> core::ops::Deref for Word<N> {
 impl<const N:usize> core::ops::DerefMut for Word<N> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+#[derive(Debug,PartialEq,Eq)]
+pub enum WordConversionError {
+    WrongLength,
+    UnencodeableChar(<EncodedChar as TryFrom<char>>::Error),
+}
+
+impl<const N:usize> TryFrom<&str> for Word<N> {
+    type Error = WordConversionError;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        let mut res:Self = Default::default();
+        let chars:Vec<_> = input.chars().collect();
+        if chars.len() != N { return Err(WordConversionError::WrongLength) }
+        for i in 0..N {
+            res.0[i] = match chars[i].try_into() {
+                Ok(v) => v,
+                Err(e) => return Err(WordConversionError::UnencodeableChar(e)),
+            }
+        }
+        Ok(res)
     }
 }
 
@@ -173,26 +263,46 @@ impl PartialOrd for MatrixIndex {
     }
 }
 
-#[derive(Debug,Copy,Clone,Eq,PartialEq,Ord,PartialOrd)]
-pub struct GenericMatrix<T>([T; WORD_SQUARE_SIZE]);
+#[derive(Copy,Clone,Eq,PartialEq,Ord,PartialOrd)]
+pub struct GenericMatrix<T>(pub [T; WORD_SQUARE_SIZE]);
 
-impl<T> GenericMatrix<T> {
-    #[must_use]
-    pub fn map<F, U>(self, mut f: F) -> GenericMatrix<U> 
-    where 
-        F: FnMut(T) -> U, 
-        U: Default + Copy,
-        T: Copy 
-    {
-        let mut other:GenericMatrix<U> = Default::default();
-        let mut idx = MatrixIndex::ZERO;
-        loop {
-            other[idx] = f(self[idx]);
-            idx = if let Some(new) = idx.inc() { new } else { break; };
+impl<T: fmt::Debug> fmt::Debug for GenericMatrix<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        writeln!(f, "Matrix(")?;
+        for row in RowIndex::all_values() {
+            writeln!(f, "    {}",ColIndex::all_values().map(|col| format!("{:?} ", self[MatrixIndex{row,col}])).collect():String)?
         }
-        other
+        write!(f, ")")
     }
 }
+
+// impl fmt::Debug for GenericMatrix<EncodedChar> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+//         writeln!(f, "Matrix(")?;
+//         for row in RowIndex::all_values() {
+//             writeln!(f, "    {:?},",dim_row::index_matrix(*self, row))?;
+//         }
+//         writeln!(f, ")")
+//     }
+// }
+
+// impl<T> GenericMatrix<T> {
+//     #[must_use]
+//     pub fn map<F, U>(self, mut f: F) -> GenericMatrix<U> 
+//     where 
+//         F: FnMut(T) -> U, 
+//         U: Default + Copy,
+//         T: Copy 
+//     {
+//         let mut other:GenericMatrix<U> = Default::default();
+//         let mut idx = MatrixIndex::ZERO;
+//         loop {
+//             other[idx] = f(self[idx]);
+//             idx = if let Some(new) = idx.inc() { new } else { break; };
+//         }
+//         other
+//     }
+// }
 
 impl<T: Default + Copy> Default for GenericMatrix<T> {
     fn default() -> Self {
@@ -259,6 +369,12 @@ pub mod dim_row {
         res
     }
 
+    pub fn set_matrix(matrix: &mut WordMatrix, i: Index, val: Word) {
+        for mi in MatrixIndex::each_cell_in_row(i) {
+            matrix[mi] = val[mi.col]
+        }
+    }
+
     pub fn get_my_index(mi: MatrixIndex) -> Index {
         mi.row
     }
@@ -276,8 +392,17 @@ pub mod dim_row {
     }
 
     pub fn size() -> usize { WORD_SQUARE_WIDTH }
+
+    pub fn index_tuple<T,U>(t: &(T, U)) -> &T {
+        &t.0
+    }
+
+    pub fn index_tuple_mut<T,U>(t: &mut (T, U)) -> &mut T {
+        &mut t.0
+    }
 }
 
+#[cfg_attr(feature = "square", allow(dead_code))]
 pub mod dim_col {
     use super::*;
     pub type Word = TallWord;
@@ -292,6 +417,12 @@ pub mod dim_col {
             res[mi.row] = matrix[mi];
         }
         res
+    }
+
+    pub fn set_matrix(matrix: &mut WordMatrix, i: Index, val: Word) {
+        for mi in MatrixIndex::each_cell_in_col(i) {
+            matrix[mi] = val[mi.row]
+        }
     }
 
     pub fn get_my_index(mi: MatrixIndex) -> Index {
@@ -312,14 +443,25 @@ pub mod dim_col {
     }
 
     #[cfg(feature = "square")]
-    pub fn prefix_map_mut(map: &mut WordPrefixMap) -> &mut TheMap<Word,CharSet> {
+    pub fn prefix_map_mut(_map: &mut WordPrefixMap) -> &mut TheMap<Word,CharSet> {
         unreachable!()
     }
 
     pub fn size() -> usize { WORD_SQUARE_HEIGHT }
+
+    pub fn index_tuple<T,U>(t: &(U, T)) -> &T {
+        &t.1
+    }
+
+    pub fn index_tuple_mut<T,U>(t: &mut (U, T)) -> &mut T {
+        &mut t.1
+    }
 }
 
+#[cfg(not(feature = "btreemap"))]
 type TheMap<K, V> = FnvHashMap<K, V>;
+#[cfg(feature = "btreemap")]
+type TheMap<K, V> = std::collections::BTreeMap<K, V>;
 
 #[derive(Debug,Default)]
 pub struct WordPrefixMap {

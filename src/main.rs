@@ -1,4 +1,4 @@
-#![feature(type_ascription)]
+#![feature(type_ascription, array_zip, min_specialization)]
 
 mod config;
 mod echar;
@@ -57,14 +57,66 @@ fn main() -> io::Result<()> {
         .arg(Arg::with_name("quiet")
             .long("quiet")
             .short("q")
-            .help("Don't show any status messages; STDERR will be empty if no errors occured. (See also --ignore-*)")
+            .help("Don't show any status messages; STDERR will be empty if no errors/warnings occured. (See also --ignore-*)")
         )
-        .get_matches();
+        .arg(Arg::with_name("must-include")
+            .long("must-include")
+            .short("m")
+            .takes_value(true)
+            .default_value("")
+            .help("Only search for word rectangles that include all of the given comma-separated words.")
+        )
+        .get_matches()
+    ;
     
     let loud = !args.is_present("quiet");
     let ignore_empty_wordlist = args.is_present("ignore-empty-wordlist");
     let ignore_unencodeable = args.is_present("ignore-unencodeable");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
+    
+    let must_include_strings:Vec<String> = args.value_of("must-include").unwrap().split(",").map(str::to_string).collect();
+
+    let mut templates:Vec<WordMatrix> = vec![Default::default()];
+
+    for include_str in &must_include_strings {
+        let mut success = false;
+        let mut old_templates = vec![];
+        std::mem::swap(&mut templates, &mut old_templates);
+        each_dimension!(dim, {
+            if let Ok(word) = include_str.as_str().try_into():Result<dim::Word,_> {
+                success = true;
+                for template in &old_templates {
+                    for i in dim::Index::all_values() {
+                        if dim::index_matrix(*template, i).is_match(word) {
+                            let mut new_template = *template;
+                            dim::set_matrix(&mut new_template, i, word);
+                            templates.push(new_template);
+                        }
+                    }
+                }
+            }
+        });
+
+        if !success {
+            if ignore_empty_wordlist {
+                std::process::exit(0);
+            } else {
+                panic!("Must-use-word lengths do not match dimensions.");
+            }
+        }
+    }
+
+    if DEBUG {
+        dbg!(&templates);
+    }
+
+    if templates.is_empty() {
+        if ignore_empty_wordlist {
+            std::process::exit(0);
+        } else {
+            panic!("must-use words can not be fit together.");
+        }
+    }
 
     if loud {
         eprintln!("Word rectangle order {}x{}", config::WORD_SQUARE_WIDTH, config::WORD_SQUARE_HEIGHT);
@@ -73,84 +125,90 @@ fn main() -> io::Result<()> {
 
     let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
 
-    let (row_counts, col_counts, prefix_map) = make_prefix_map(f.lines().map(|l| l.unwrap()), ignore_unencodeable);
+    let words = f.lines().filter(|r| {
+        if let Ok(s) = r {
+            s.len() == config::WORD_SQUARE_WIDTH || s.len() == config::WORD_SQUARE_HEIGHT
+        } else { true }
+    }).collect::<Result<Vec<_>,_>>()?;
 
-    if !ignore_empty_wordlist && (prefix_map.rows().is_empty() || prefix_map.cols().is_empty()) {
+    if !ignore_empty_wordlist && words.is_empty() {
         panic!("No words in wordlist!");
     }
-    if loud {
-        eprintln!("Finished creating index, {} row words X {} col words", row_counts, col_counts);
-    }
 
-    // "m2w" => main thread to worker threads
-    // "w2m" => worker threads to main thread
-    let (m2w_tx, m2w_rx) = crossbeam_channel::bounded::<WordMatrix>(128);
-    let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(128);
-    let mut worker_handles = Vec::new();
-
-    if loud {
-        eprintln!("Creating {} worker threads.", num_threads);
-    }
-
-    let prefix_map_arc = std::sync::Arc::new(prefix_map);
-
-    
-    for _ in 0..num_threads {
-        let rxc = m2w_rx.clone();
-        let txc = w2m_tx.clone();
-        let my_prefix_map = std::sync::Arc::clone(&prefix_map_arc);
-        worker_handles.push(
-            std::thread::spawn( move || {
-                while let Ok(msg) = rxc.recv() {
-                    compute(
-                        &my_prefix_map,
-                        msg,
-                        MatrixIndex{row: RowIndex::MAX, col: ColIndex::MAX},
-                        |a| txc.send(a).unwrap()
-                    );
-                }
-            })
-        );
-    }
-
-    drop(w2m_tx);
-
-    let printing_thread = std::thread::spawn(move || {
-        while let Ok(msg) = w2m_rx.recv() {
-            print_word_matrix(msg);
+    for template in &templates {
+        let (row_counts, col_counts, prefix_map) = make_prefix_map(*template, words.iter(), ignore_unencodeable);
+        if loud {
+            eprintln!("Finished creating index, {} row words X {} col words", row_counts, col_counts);
         }
-    });
-    
-    let code_array = WordMatrix::default();
 
-    if loud {
-        eprintln!("Starting.");
-    }
+        // "m2w" => main thread to worker threads
+        // "w2m" => worker threads to main thread
+        let (m2w_tx, m2w_rx) = crossbeam_channel::bounded::<WordMatrix>(128);
+        let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(128);
+        let mut worker_handles = Vec::new();
 
-    let mut time = devtimer::DevTime::new_simple();
-    time.start();
-    // dbg!();
-    let a = &*prefix_map_arc;
-    // dbg!();
-    let m = MatrixIndex{row: 1usize.try_into().unwrap(), col: 0usize.try_into().unwrap()};
-    // dbg!();
-    let f = |ca| m2w_tx.send(ca).unwrap();
-    // dbg!();
-    compute(
-        a,
-        code_array,
-        m,
-        f,
-    );
+        if loud {
+            eprintln!("Creating {} worker threads.", num_threads);
+        }
 
-    drop(m2w_tx);
-    for h in worker_handles {
-        h.join().unwrap();
-    }
-    printing_thread.join().unwrap();
-    time.stop();
-    if loud {
-        eprintln!("Took {} secs", (time.time_in_micros().unwrap() as u64 as f64) / 1_000_000.0)
+        let prefix_map_arc = std::sync::Arc::new(prefix_map);
+
+        
+        for _ in 0..num_threads {
+            let rxc = m2w_rx.clone();
+            let txc = w2m_tx.clone();
+            let my_prefix_map = std::sync::Arc::clone(&prefix_map_arc);
+            worker_handles.push(
+                std::thread::spawn( move || {
+                    while let Ok(msg) = rxc.recv() {
+                        compute(
+                            &my_prefix_map,
+                            msg,
+                            MatrixIndex{row: RowIndex::MAX, col: ColIndex::MAX},
+                            |a| txc.send(a).unwrap()
+                        );
+                    }
+                })
+            );
+        }
+
+        drop(w2m_tx);
+
+        let printing_thread = std::thread::spawn(move || {
+            while let Ok(msg) = w2m_rx.recv() {
+                print_word_matrix(msg);
+            }
+        });
+
+        if loud {
+            eprintln!("Starting.");
+        }
+
+        let mut time = devtimer::DevTime::new_simple();
+        time.start();
+        // dbg!();
+        let a = &*prefix_map_arc;
+        // dbg!();
+        let m = MatrixIndex{row: 1usize.try_into().unwrap(), col: 0usize.try_into().unwrap()};
+        // dbg!();
+        let f = |ca| m2w_tx.send(ca).unwrap();
+        // dbg!();
+        compute(
+            a,
+            *template,
+            m,
+            f,
+        );
+
+        drop(m2w_tx);
+        for h in worker_handles {
+            h.join().unwrap();
+        }
+        printing_thread.join().unwrap();
+        time.stop();
+        if loud {
+            eprintln!("Took {} secs", (time.time_in_micros().unwrap() as u64 as f64) / 1_000_000.0)
+        }
     }
 
     Ok(())
@@ -169,6 +227,7 @@ fn print_word_matrix(wm: WordMatrix) {
 // It is assumed that this function does *not* need to be fast, and should be written in whatever way is reasonably fast and most correct and elegant.
 fn make_prefix_map<I>
 (
+    template: WordMatrix,
     wordlist: I,
     ignore_unencodeable: bool,
 ) -> (usize, usize, WordPrefixMap)
@@ -178,13 +237,33 @@ where
 {
     let mut word_counts = [0usize; 2];
     let mut res:WordPrefixMap = Default::default();
+    let mut word_templates = (vec![], vec![]);
+    each_dimension!(dim, {
+        let my_templates = dim::index_tuple_mut(&mut word_templates);
+        for i in dim::Index::all_values() {
+            let word = dim::index_matrix(template, i);
+            my_templates.push(word);
+        }
+        my_templates.sort();
+        my_templates.dedup();
+    });
+    #[cfg(feature = "square")]
+    {
+        for el in &word_templates.1 {
+            word_templates.0.push(*el);
+        }
+        word_templates.0.sort();
+        word_templates.0.dedup();
+    }
     'each_word: for w in wordlist {
         let s:&str = w.as_ref();
         let chars = s.chars().map(|c| c.to_ascii_lowercase()).collect():Vec<_>;
+        if s == "icbms" || s == "items" { dbg!(s,&chars); }
         each_unique_dimension!(dim, {
             if chars.len() == dim::size() {
                 let mut w:dim::Word = Default::default();
                 for i in dim::cross::Index::all_values() {
+                    if s == "items" { dbg!(i, w); }
                     match chars[i.into():usize].try_into() {
                         Err(e) => {
                             if !ignore_unencodeable {
@@ -192,14 +271,30 @@ where
                             }
                             continue 'each_word;
                         }
+                        Ok(NULL_CHAR) => {
+                            if !ignore_unencodeable {
+                                eprintln!("Found null indicator");
+                            }
+                            continue 'each_word;
+                        }
                         Ok(v) => w[i] = v,
                     }
                 }
                 word_counts[dim::DIMENSION_ID] += 1;
-                for i in dim::cross::Index::all_values().rev() {
-                    let cur = w[i];
-                    w[i] = NULL_CHAR;
-                    dim::prefix_map_mut(&mut res).entry(w).or_default().set(cur);
+                for c in &*w { assert_ne!(*c, NULL_CHAR); }
+                if s == "items" { dbg!(w); }
+                for &template in dim::index_tuple(&word_templates) {
+                    if template.is_match(w) {
+                        let p = w.prefixes(template);
+                        if s == "items" { dbg!(&p); }
+                        for (prefix,c) in p {
+                            if prefix == "icb**".try_into().unwrap() {
+                            // if s == "items" {
+                                dbg!(w,prefix,c,template);
+                            }
+                            dim::prefix_map_mut(&mut res).entry(prefix).or_default().set(c);
+                        }
+                    }
                 }
             }
         })
@@ -220,18 +315,24 @@ fn compute<F: FnMut(WordMatrix)>(
 ) {
     let mut at_idx = MatrixIndex::ZERO;
     let mut charset_array:GenericMatrix<CharSet> = Default::default();
-    let mut matrix = WordMatrix::default();
+    let mut is_nullish:GenericMatrix<bool> = GenericMatrix([true; config::WORD_SQUARE_SIZE]);
+    let mut matrix = orig_matrix;
+
+    for row in RowIndex::all_values() {
+        for col in ColIndex::all_values() {
+            let mi = MatrixIndex{row,col};
+            if orig_matrix[mi] != NULL_CHAR {
+                charset_array[mi].set(orig_matrix[mi]);
+            }
+        }
+    }
 
     loop {
         if DEBUG {
             dbg!(at_idx,matrix);
         }
-        if matrix[at_idx] == NULL_CHAR {
-            if orig_matrix[at_idx] != NULL_CHAR {
-                let mut c = CharSet::default();
-                c.set(orig_matrix[at_idx]);
-                charset_array[at_idx] = c;
-            } else {
+        if is_nullish[at_idx] {
+            if orig_matrix[at_idx] == NULL_CHAR {
                 let (row_set, col_set) = each_dimension!(dim, {
                     dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).map(|c| *c).unwrap_or_default()
                 });
@@ -239,20 +340,24 @@ fn compute<F: FnMut(WordMatrix)>(
             }
         }
 
-        match matrix[at_idx].inc() {
-            Some(e) => matrix[at_idx] = e,
-            None => {
-                matrix[at_idx] = NULL_CHAR;
-                match at_idx.dec() {
-                    Some(i) => {
-                        at_idx = i;
-                    },
-                    None => return,
+        if orig_matrix[at_idx] == NULL_CHAR || !is_nullish[at_idx] {
+            match matrix[at_idx].inc() {
+                Some(e) => matrix[at_idx] = e,
+                None => {
+                    matrix[at_idx] = orig_matrix[at_idx];
+                    is_nullish[at_idx] = true;
+                    match at_idx.dec() {
+                        Some(i) => {
+                            at_idx = i;
+                        },
+                        None => return,
+                    }
+                    continue;
                 }
-                continue;
             }
         }
 
+        is_nullish[at_idx] = false;
         if charset_array[at_idx].has(matrix[at_idx]) {
             let next = at_idx.inc();
             if next == target_idx.inc() {

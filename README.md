@@ -63,11 +63,10 @@ To do the actual solving, we have a recursive function which takes in a partiall
 
 For example, given a partially completed matrix like this:
 
-| m | o | m |
-| - | - | - |
-| o | r | * |
-| - | - | - |
-| . | . | . |
+|:M:|:O:|:M:|
+|:O:|:R:|:*:|
+|:.:|:.:|:.:|
+|:.:|:.:|:.:|
 
 Where `.`s are empty spaces, and `*` is the next empty space.
 
@@ -75,7 +74,7 @@ Access the hashmap keys `or` for the row prefix and `m` for the column prefix. T
 
 ```
 rowSet := rowMap["or"] #=> {'a', 'd', 'e'}
-colSet := rowMap["m"] #=> {'b', 'c', 'd', 'e', 'f', ...}
+colSet := colMap["m"] #=> {'b', 'c', 'd', 'e', 'f', ...}
 charSet := intersection(rowSet, colSet) #=> {'d', 'e'}
 ```
 
@@ -83,6 +82,24 @@ Iterate over each possible next character, creating a new matrix with one more c
 
 Note that the intersection of the two sets may be empty. That's just a "dead end", where no recursion happens (iterate over the empty set) and it just returns.
 
-### Actual Algorithm Details
+### Actual Implementation Details
 
-In the interest of
+In the interest of SPEED, the actual code works a bit differently. The `CharSet` type is a HashSet in spirit, but a `u32`-backed bitmap in practice (thus set intersection becomes a bitwise and). This means that there is a limit of 32 possible values. These are represented as 0..32 in a `u8`, in a wrapper called `EncodedChar`. There's also a special null value, 255. An `Option<_>` is not used because:
+
+1. I want the value to fit in one byte.
+2. I want to be able to set the Nth bit in a CharSet(u32) without an extra addition step, which means 0 must be used for one of the meaningful values, and so I cannot use a `NonZeroU8`.
+
+Thus you will see `... == NULL_CHAR` rather than the more rusty `.is_none()`.
+
+Liberal use is made of static-size arrays and ranged ints to make safe unchecked indexes into them.
+
+For the prefix map, static arrays of the word length are used with the remaining elements filled in with `NULL_CHAR`, so `prefix_map.get(&[EncodedChar('a'), NULL_CHAR, NULL_CHAR])` gets the `CharSet` of next possible characters for all words that start with 'a' in a 3-letter-word prefix map.
+
+The `compute` function is "flattened out", so no recursion happens and it's just a simple loop. You can think of the working matrix and associated list of CharSets as the stack, and `at_idx` as the stack pointer.
+
+## Previous Iterations
+
+Previous (uglier, hackier) versions of this project:
+
+* [rust-word-squares](https://github.com/shelvacu/rust-word-squares), written in Rust, much less use of well-needed encapsulation. Possibly broken. Can find word rectangles, despite the name.
+* [fast-word-squares](https://github.com/shelvacu/fast-word-squares), written in [Crystal](https://crystal-lang.org/) before Crystal 1.0, so likely uses broken/deprecated features (including turning off the GC during the hot code, which is a big no-no but garnered a 3% speedup at the time). The first version I made, supports a client/server architecture but does not support multithreading. Can only find word squares.
