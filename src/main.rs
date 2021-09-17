@@ -63,7 +63,6 @@ fn main() -> io::Result<()> {
             .long("must-include")
             .short("m")
             .takes_value(true)
-            .default_value("")
             .help("Only search for word rectangles that include all of the given comma-separated words.")
         )
         .get_matches()
@@ -74,7 +73,7 @@ fn main() -> io::Result<()> {
     let ignore_unencodeable = args.is_present("ignore-unencodeable");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
     
-    let must_include_strings:Vec<String> = args.value_of("must-include").unwrap().split(",").map(str::to_string).collect();
+    let must_include_strings:Vec<String> = args.value_of("must-include").map(|s| s.split(",").map(str::to_string).collect()).unwrap_or_default();
 
     let mut templates:Vec<WordMatrix> = vec![Default::default()];
 
