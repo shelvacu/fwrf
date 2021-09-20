@@ -58,8 +58,14 @@ pub const WORD_SQUARE_HEIGHT:usize = 15;
 
 pub const WORD_SQUARE_SIZE:usize = WORD_SQUARE_WIDTH * WORD_SQUARE_HEIGHT;
 
+#[cfg(feature = "charset-size-32")]
 pub type CharSetInner = u32;
-pub const CHAR_SET_SIZE:usize = 32;
+#[cfg(feature = "charset-size-64")]
+pub type CharSetInner = u64;
+#[cfg(feature = "charset-size-128")]
+pub type CharSetInner = u128;
+
+pub const CHAR_SET_SIZE:usize = std::mem::size_of::<CharSetInner>() * 8;
 pub const CHAR_SET_SIZE_U16:u16 = CHAR_SET_SIZE as u16;
 const CHAR_SET_SIZE_MINUS_1:usize = CHAR_SET_SIZE - 1;
 pub type CharSetRanged = deranged::Usize<0,CHAR_SET_SIZE_MINUS_1>;
@@ -72,5 +78,3 @@ static_assertions::const_assert_eq!(WORD_SQUARE_HEIGHT, WORD_SQUARE_WIDTH);
 
 #[cfg(not(feature = "square"))]
 static_assertions::const_assert_ne!(WORD_SQUARE_HEIGHT, WORD_SQUARE_WIDTH);
-
-static_assertions::const_assert_eq!(std::mem::size_of::<CharSetInner>() * 8, CHAR_SET_SIZE);

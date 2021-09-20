@@ -2,10 +2,10 @@
 <head>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto-Mono:wght@500&display=swap" rel="stylesheet">
     <style>
         table {
-            font-family: 'Roboto', sans-serif;
+            font-family: 'Roboto Mono', sans-serif;
             text-align: center;
             font-weight: 500;
             line-height: 0.7;
@@ -13,7 +13,7 @@
         }
 
         table td {
-            padding: 8px 15px;
+            padding: 3px 5px;
             /* transform: rotate(45deg); */
         }
     </style>
@@ -30,7 +30,7 @@
             let tr = document.createElement("tr");
             word.split("").forEach(c => {
                 let td = document.createElement("td");
-                td.innerText = c;//.toUpperCase();
+                td.innerText = c.toUpperCase();
                 tr.appendChild(td);
             });
             the_thing.appendChild(tr);

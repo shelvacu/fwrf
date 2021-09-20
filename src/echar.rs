@@ -47,44 +47,51 @@ macro_rules! encoded_char_impls {
         impl TryFrom<char> for EncodedChar {
             type Error = &'static str;
 
+            #[forbid(unreachable_patterns)]
             fn try_from(value: char) -> Result<Self, Self::Error> {
                 match value {
                     $(
                         $char => Ok(Self($codepoint)),
                     )*
-                    '*' => Ok(NULL_CHAR),
+                    '&' => Ok(NULL_CHAR),
                     _ => Err("Invalid char for EncodedChar")
                 }
             }
         }
 
         impl From<CharSetRanged> for EncodedChar {
+            #[forbid(unreachable_patterns)]
             fn from(value: CharSetRanged) -> EncodedChar {
                 match value.into():usize {
                     $(
                         $codepoint => Self($codepoint),
                     )*
                     _ => {
+                        #[cfg(feature = "unchecked")]
                         unsafe { ::core::hint::unreachable_unchecked() }
+                        #[cfg(not(feature = "unchecked"))]
+                        unreachable!()
                     }
                 }
             }
         }
 
         impl From<EncodedChar> for char {
+            #[forbid(unreachable_patterns)]
             fn from(value: EncodedChar) -> char {
                 match value {
                     $(
                         EncodedChar($codepoint) => $char,
                     )*
                     EncodedChar(c) if (c as usize) == CHAR_SET_SIZE + 1 => '$',
-                    NULL_CHAR => '*',
-                    _ => '*',
+                    NULL_CHAR => '&',
+                    _ => '?',
                 }
             }
         }
 
         #[allow(dead_code)]
+        #[forbid(unreachable_patterns)]
         const CONST_TO_CHECK_ALL_CHARS_SET:() = match 0u16 {
             $(
                 $codepoint => (),
@@ -94,6 +101,7 @@ macro_rules! encoded_char_impls {
     }
 }
 
+#[cfg(feature = "charset-english-small")]
 encoded_char_impls! {
     0  => 'a',
     1  => 'b',
@@ -121,10 +129,79 @@ encoded_char_impls! {
     23 => 'x',
     24 => 'y',
     25 => 'z',
+    26 => '.',
+    27 => '-',
+    28 => ',',
+    29 => 'é',
+    30 => '\'',
+    31 => '/',
+}
+
+// The top 64 most used characters in the google ngrams corpus
+#[cfg(feature = "charset-english-extended")]
+encoded_char_impls! {
+    0  => 'e',
+    1  => 'i',
+    2  => 'a',
+    3  => 'n',
+    4  => 's',
+    5  => 'r',
+    6  => 't',
+    7  => 'o',
+    8  => 'l',
+    9  => 'c',
+    10 => 'd',
+    11 => 'u',
+    12 => 'g',
+    13 => 'm',
+    14 => 'p',
+    15 => 'h',
+    16 => '.',
+    17 => 'b',
+    18 => 'y',
+    19 => 'f',
+    20 => 'v',
+    21 => 'w',
+    22 => 'k',
+    23 => '1',
+    24 => 'z',
+    25 => 'x',
     26 => '0',
-    27 => '1',
+    27 => '-',
     28 => '2',
-    29 => '3',
-    30 => '4',
-    31 => '5',
+    29 => 'q',
+    30 => 'j',
+    31 => '3',
+    32 => '4',
+    33 => '9',
+    34 => '5',
+    35 => '7',
+    36 => '8',
+    37 => '6',
+    38 => ',',
+    39 => 'é',
+    40 => '\'',
+    41 => '/',
+    42 => ':',
+    43 => 'è',
+    44 => 'á',
+    45 => 'ü',
+    46 => 'ó',
+    47 => 'ö',
+    48 => 'í',
+    49 => 'ç',
+    50 => 'ä',
+    51 => 'ñ',
+    52 => '*',
+    53 => '@',
+    54 => 'ú',
+    55 => 'ø',
+    56 => 'à',
+    57 => 'æ',
+    58 => 'â',
+    59 => 'î',
+    60 => 'œ',
+    61 => 'ï',
+    62 => 'ã',
+    63 => 'ô',
 }

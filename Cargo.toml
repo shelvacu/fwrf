@@ -33,6 +33,12 @@ panic = 'abort'
 do-debug = []
 unchecked = ["deranged/unsafe-range-assert"]
 btreemap = []
+
+charset-english-small = ["charset-size-32"]
+charset-english-extended = ["charset-size-64"]
+
+charset-size-32 = []
+charset-size-64 = []
 # To indicate that width is the same as height.
 square = []
 
@@ -65,4 +71,4 @@ height-13 = []
 height-14 = []
 height-15 = []
 
-default = ["width-8", "height-5"]
+default = ["width-8", "height-5", "charset-english-small"]

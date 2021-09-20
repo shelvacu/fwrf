@@ -134,11 +134,24 @@ fn main() -> io::Result<()> {
         panic!("No words in wordlist!");
     }
 
+    if loud {
+        eprintln!("Starting.");
+    }
+
+    let mut time = devtimer::DevTime::new_simple();
+    time.start();
+
     for template in &templates {
-        let (row_counts, col_counts, prefix_map) = make_prefix_map(*template, words.iter(), ignore_unencodeable);
-        if loud {
-            eprintln!("Finished creating index, {} row words X {} col words", row_counts, col_counts);
-        }
+        let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, words.iter(), ignore_unencodeable);
+        // if loud {
+        //     eprintln!("Finished creating index, {} row words X {} col words", row_counts, col_counts);
+        // }
+
+        each_unique_dimension!(dim, {
+            if dim::prefix_map(&prefix_map).is_empty() {
+                continue;
+            }
+        });
 
         // "m2w" => main thread to worker threads
         // "w2m" => worker threads to main thread
@@ -146,9 +159,9 @@ fn main() -> io::Result<()> {
         let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(128);
         let mut worker_handles = Vec::new();
 
-        if loud {
-            eprintln!("Creating {} worker threads.", num_threads);
-        }
+        // if loud {
+        //     eprintln!("Creating {} worker threads.", num_threads);
+        // }
 
         let prefix_map_arc = std::sync::Arc::new(prefix_map);
 
@@ -179,12 +192,6 @@ fn main() -> io::Result<()> {
             }
         });
 
-        if loud {
-            eprintln!("Starting.");
-        }
-
-        let mut time = devtimer::DevTime::new_simple();
-        time.start();
         let a = &*prefix_map_arc;
         let m = MatrixIndex{row: 1usize.try_into().unwrap(), col: 0usize.try_into().unwrap()};
         let f = |ca| m2w_tx.send(ca).unwrap();
@@ -200,10 +207,10 @@ fn main() -> io::Result<()> {
             h.join().unwrap();
         }
         printing_thread.join().unwrap();
-        time.stop();
-        if loud {
-            eprintln!("Took {} secs", (time.time_in_micros().unwrap() as u64 as f64) / 1_000_000.0)
-        }
+    }
+    time.stop();
+    if loud {
+        eprintln!("Took {} secs", (time.time_in_micros().unwrap() as u64 as f64) / 1_000_000.0)
     }
 
     Ok(())
@@ -214,7 +221,7 @@ fn print_word_matrix(wm: WordMatrix) {
         for col in ColIndex::all_values() {
             print!("{}", wm[MatrixIndex{row,col}].into():char);
         }
-        if row < RowIndex::MAX { print!("-"); }
+        if row < RowIndex::MAX { print!("|"); }
     }
     print!("\n");
 }
