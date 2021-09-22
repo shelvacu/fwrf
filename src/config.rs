@@ -70,9 +70,6 @@ pub const CHAR_SET_SIZE_U16:u16 = CHAR_SET_SIZE as u16;
 const CHAR_SET_SIZE_MINUS_1:usize = CHAR_SET_SIZE - 1;
 pub type CharSetRanged = deranged::Usize<0,CHAR_SET_SIZE_MINUS_1>;
 
-// TODO: is this really needed?
-static_assertions::const_assert!(WORD_SQUARE_SIZE < (u8::MAX as usize));
-
 #[cfg(feature = "square")]
 static_assertions::const_assert_eq!(WORD_SQUARE_HEIGHT, WORD_SQUARE_WIDTH);
 

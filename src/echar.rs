@@ -112,6 +112,7 @@ macro_rules! encoded_char_impls {
     }
 }
 
+// The top 32 characters (after downcasing), excluding numerals.
 #[cfg(feature = "charset-english-small")]
 encoded_char_impls! {
     0  => 'a',

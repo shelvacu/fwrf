@@ -349,34 +349,6 @@ impl<T: fmt::Debug> fmt::Debug for GenericMatrix<T> {
     }
 }
 
-// impl fmt::Debug for GenericMatrix<EncodedChar> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-//         writeln!(f, "Matrix(")?;
-//         for row in RowIndex::all_values() {
-//             writeln!(f, "    {:?},",dim_row::index_matrix(*self, row))?;
-//         }
-//         writeln!(f, ")")
-//     }
-// }
-
-// impl<T> GenericMatrix<T> {
-//     #[must_use]
-//     pub fn map<F, U>(self, mut f: F) -> GenericMatrix<U> 
-//     where 
-//         F: FnMut(T) -> U, 
-//         U: Default + Copy,
-//         T: Copy 
-//     {
-//         let mut other:GenericMatrix<U> = Default::default();
-//         let mut idx = MatrixIndex::ZERO;
-//         loop {
-//             other[idx] = f(self[idx]);
-//             idx = if let Some(new) = idx.inc() { new } else { break; };
-//         }
-//         other
-//     }
-// }
-
 impl<T: Default + Copy> Default for GenericMatrix<T> {
     fn default() -> Self {
         Self([Default::default(); WORD_SQUARE_SIZE])
@@ -398,33 +370,6 @@ impl<T> IndexMut<MatrixIndex> for GenericMatrix<T> {
         &mut self.0[idx.into_flat_index()]
     }
 }
-
-// pub trait Dimension {
-//     type Word;
-//     type Index;
-//     type Cross: Dimension;
-
-//     fn index_matrix(matrix: WordMatrix, i: Self::Index) -> Self::Word;
-
-//     fn cross() -> Self::Cross;
-
-//     fn prefix_map(map: &WordPrefixMap) -> &TheMap<Self::Word,CharSet>;
-
-//     fn prefix_map_mut(map: &mut WordPrefixMap) -> &mut TheMap<Self::Word,CharSet>;
-
-//     fn get_my_index(mi: MatrixIndex) -> Self::Index;
-
-//     fn get_word_intersecting_point(matrix: WordMatrix, point: MatrixIndex) -> Self::Word {
-//         Self::index_matrix(matrix, Self::get_my_index(point))
-//     }
-
-//     fn size() -> usize;
-// }
-
-// #[derive(Debug,Clone,Copy,PartialEq,Eq,PartialOrd,Ord)]
-// pub struct DimRow;
-// #[derive(Debug,Clone,Copy,PartialEq,Eq,PartialOrd,Ord)]
-// pub struct DimCol;
 
 pub mod dim_row {
     use super::*;
