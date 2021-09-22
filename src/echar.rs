@@ -8,7 +8,11 @@ pub struct EncodedChar(u8);
 
 impl fmt::Debug for EncodedChar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "E{}", (*self).into():char)
+        if *self == NULL_CHAR || (self.0 as usize) < CHAR_SET_SIZE {
+            write!(f, "E{}", (*self).into():char)
+        } else {
+            write!(f, "E{}", self.0)
+        }
     }
 }
 

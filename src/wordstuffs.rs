@@ -32,7 +32,9 @@ impl<const N:usize> Word<N> {
                 mod_self[i] = NULL_CHAR;
                 res.push((mod_self, c));
             } else {
+                #[cfg(test)]
                 assert_eq!(pattern[i], mod_self[i]);
+                #[cfg(test)]
                 assert_eq!(mod_self[i], self[i]);
             }
         }
@@ -42,13 +44,13 @@ impl<const N:usize> Word<N> {
 
 #[test]
 fn prefixes_work() {
-    let pattern:Word<4> = "**a*".try_into().unwrap();
+    let pattern:Word<4> = "&&a&".try_into().unwrap();
     let word:Word<4> = "star".try_into().unwrap();
     let mut test_prefixes = word.prefixes(pattern);
     let mut expected_prefixes:Vec<(Word<4>,EncodedChar)> = vec![
-        ("sta*",'r'),
-        ("s*a*",'t'),
-        ("**a*",'s')
+        ("sta&",'r'),
+        ("s&a&",'t'),
+        ("&&a&",'s')
     ].into_iter().map(|(w,c)| (w.try_into().unwrap(), c.try_into().unwrap())).collect();
     test_prefixes.sort();
     expected_prefixes.sort();
@@ -57,14 +59,14 @@ fn prefixes_work() {
 
 #[test]
 fn prefixes_work_degenerate() {
-    let pattern:Word<4> = "****".try_into().unwrap();
+    let pattern:Word<4> = "&&&&".try_into().unwrap();
     let word:Word<4> = "star".try_into().unwrap();
     let mut test_prefixes = word.prefixes(pattern);
     let mut expected_prefixes:Vec<(Word<4>,EncodedChar)> = vec![
-        ("sta*",'r'),
-        ("st**",'a'),
-        ("s***",'t'),
-        ("****",'s'),
+        ("sta&",'r'),
+        ("st&&",'a'),
+        ("s&&&",'t'),
+        ("&&&&",'s'),
     ].into_iter().map(|(w,c)| (w.try_into().unwrap(), c.try_into().unwrap())).collect();
     test_prefixes.sort();
     expected_prefixes.sort();
@@ -73,7 +75,7 @@ fn prefixes_work_degenerate() {
 
 #[test]
 fn not_match() {
-    let a:Word<5> = "*cb**".try_into().unwrap();
+    let a:Word<5> = "&cb&&".try_into().unwrap();
     let b:Word<5> = "items".try_into().unwrap();
     assert!(!a.is_match(b));
 }

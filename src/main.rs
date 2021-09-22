@@ -400,3 +400,80 @@ fn compute<F: FnMut(WordMatrix)>(
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::sync::{Arc,Mutex};
+    use super::*;
+    use config::{WORD_SQUARE_WIDTH,WORD_SQUARE_HEIGHT};
+
+    #[allow(dead_code)]
+    fn assert_results(
+        wordlist_str: &[&str],
+        must_use_str: &[&str],
+        expected_results_str: &[&[&str]],
+    ) {
+        let mut expected_results:Vec<_> = expected_results_str.iter().map(|str_a| {
+            let mut m = WordMatrix::default();
+            assert_eq!(str_a.len(), WORD_SQUARE_HEIGHT);
+            for rowi in RowIndex::all_values() {
+                let row_chars:Vec<_> = str_a[rowi.into():usize].chars().collect();
+                assert_eq!(row_chars.len(), WORD_SQUARE_WIDTH);
+                for coli in ColIndex::all_values() {
+                    let mi = MatrixIndex{row: rowi, col: coli};
+                    m[mi] = row_chars[coli.into():usize].try_into().unwrap();
+                }
+            }
+            m
+        }).collect();
+
+        expected_results.sort();
+
+        let wordlist:Vec<EitherWord> = wordlist_str.iter().map(|&s| s.try_into().unwrap()).collect();
+        let must_use:Vec<EitherWord> = must_use_str.iter().map(|&s| s.try_into().unwrap()).collect();
+        let templates:Vec<WordMatrix> = make_templates(must_use.as_slice(),vec![Default::default()]);
+        let results_mutex = Arc::new(Mutex::new(Vec::new()));
+
+        let their_results_mutex = Arc::clone(&results_mutex);
+        outer_compute(
+            wordlist.as_slice(),
+            templates.as_slice(),
+            1,
+            move |rx| {
+                let mut results_lock = their_results_mutex.lock().unwrap();
+                while let Ok(ws) = rx.recv() { results_lock.push(ws); }
+                drop(results_lock);
+                drop(their_results_mutex);
+                Ok(())
+            }
+        );
+
+        let mut lock = results_mutex.lock().unwrap();
+        let mut results = Vec::new();
+        std::mem::swap(&mut results, &mut lock);
+        drop(lock);
+        drop(results_mutex);
+
+        results.sort();
+
+        assert_eq!(results, expected_results);
+    }
+
+    #[cfg(all(feature = "width-5", feature = "height-5"))]
+    #[test]
+    fn sator_square() {
+        assert_results(
+            &["sator","arepo","opera","rotas","tenet"],
+            &[],
+            &[
+                &[
+                    "sator",
+                    "arepo",
+                    "tenet",
+                    "opera",
+                    "rotas",
+                ]
+            ],
+        );
+    }
+}
