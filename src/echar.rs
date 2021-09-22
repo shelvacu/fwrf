@@ -42,10 +42,21 @@ impl EncodedChar {
 
 pub const NULL_CHAR:EncodedChar = EncodedChar(u8::MAX);
 
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+pub struct UnencodeableChar(pub char);
+
+impl fmt::Display for UnencodeableChar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "UnencodeableChar({:?})", self.0)
+    }
+}
+
+impl std::error::Error for UnencodeableChar {}
+
 macro_rules! encoded_char_impls {
     ($($codepoint:literal => $char:literal,)*) => {
         impl TryFrom<char> for EncodedChar {
-            type Error = &'static str;
+            type Error = UnencodeableChar;
 
             #[forbid(unreachable_patterns)]
             fn try_from(value: char) -> Result<Self, Self::Error> {
@@ -54,7 +65,7 @@ macro_rules! encoded_char_impls {
                         $char => Ok(Self($codepoint)),
                     )*
                     '&' => Ok(NULL_CHAR),
-                    _ => Err("Invalid char for EncodedChar")
+                    _ => Err(UnencodeableChar(value))
                 }
             }
         }
@@ -137,7 +148,7 @@ encoded_char_impls! {
     31 => '/',
 }
 
-// The top 64 most used characters in the google ngrams corpus
+// The top 64 most used characters (after downcasing) in the google ngrams corpus
 #[cfg(feature = "charset-english-extended")]
 encoded_char_impls! {
     0  => 'e',

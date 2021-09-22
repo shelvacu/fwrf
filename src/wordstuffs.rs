@@ -101,7 +101,7 @@ impl<const N:usize> core::ops::DerefMut for Word<N> {
 #[derive(Debug,PartialEq,Eq)]
 pub enum WordConversionError {
     WrongLength,
-    UnencodeableChar(<EncodedChar as TryFrom<char>>::Error),
+    UnencodeableChar(usize, <EncodedChar as TryFrom<char>>::Error),
 }
 
 impl<const N:usize> TryFrom<&str> for Word<N> {
@@ -114,7 +114,7 @@ impl<const N:usize> TryFrom<&str> for Word<N> {
         for i in 0..N {
             res.0[i] = match chars[i].try_into() {
                 Ok(v) => v,
-                Err(e) => return Err(WordConversionError::UnencodeableChar(e)),
+                Err(e) => return Err(WordConversionError::UnencodeableChar(i, e)),
             }
         }
         Ok(res)
@@ -123,6 +123,77 @@ impl<const N:usize> TryFrom<&str> for Word<N> {
 
 pub type TallWord = Word<WORD_SQUARE_HEIGHT>;
 pub type WideWord = Word<WORD_SQUARE_WIDTH>;
+
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+pub enum EitherWord {
+    Tall(TallWord),
+    #[cfg(not(feature = "square"))]
+    Wide(WideWord),
+}
+
+#[cfg(feature = "square")]
+impl TryFrom<&str> for EitherWord {
+    type Error = WordConversionError;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        Ok(Self::Tall(TallWord::try_from(input)?))
+    }
+}
+
+#[cfg(not(feature = "square"))]
+impl TryFrom<&str> for EitherWord {
+    type Error = WordConversionError;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        match TallWord::try_from(input) {
+            Ok(v) => return Ok(Self::from(v)),
+            Err(e @ WordConversionError::UnencodeableChar(_,_)) => return Err(e),
+            Err(WordConversionError::WrongLength) => (),
+        }
+        WideWord::try_from(input).map(|w| Self::from(w))
+    }
+}
+
+impl From<TallWord> for EitherWord {
+    fn from(w: TallWord) -> Self {
+        Self::Tall(w)
+    }
+}
+
+#[cfg(not(feature = "square"))]
+impl From<WideWord> for EitherWord {
+    fn from(w: WideWord) -> Self {
+        Self::Wide(w)
+    }
+}
+
+#[cfg(feature = "square")]
+impl EitherWord {
+    pub fn tall(self) -> Option<TallWord> {
+        Some(match self {Self::Tall(v) => v})
+    }
+
+    pub fn wide(self) -> Option<WideWord> {
+        Some(match self {Self::Tall(v) => v})
+    }
+}
+
+#[cfg(not(feature = "square"))]
+impl EitherWord {
+    pub fn tall(self) -> Option<TallWord> {
+        match self {
+            Self::Tall(v) => Some(v),
+            Self::Wide(_) => None,
+        }
+    }
+
+    pub fn wide(self) -> Option<WideWord> {
+        match self {
+            Self::Tall(_) => None,
+            Self::Wide(v) => Some(v),
+        }
+    }
+}
 
 const HEIGHT_MINUS_ONE:usize = WORD_SQUARE_HEIGHT - 1;
 const WIDTH_MINUS_ONE:usize  = WORD_SQUARE_WIDTH  - 1;
@@ -400,6 +471,10 @@ pub mod dim_row {
     pub fn index_tuple_mut<T,U>(t: &mut (T, U)) -> &mut T {
         &mut t.0
     }
+
+    pub fn get_from_either(e: EitherWord) -> Option<Word> {
+        e.wide()
+    }
 }
 
 #[cfg_attr(feature = "square", allow(dead_code))]
@@ -456,7 +531,16 @@ pub mod dim_col {
     pub fn index_tuple_mut<T,U>(t: &mut (U, T)) -> &mut T {
         &mut t.1
     }
+
+    pub fn get_from_either(e: EitherWord) -> Option<Word> {
+        e.tall()
+    }
 }
+
+// This little hack is extremely useful for IDE completions when using the each_dimension macros
+#[cfg(debug)]
+#[allow(dead_code)]
+pub use dim_row as dim;
 
 #[cfg(not(feature = "btreemap"))]
 type TheMap<K, V> = FnvHashMap<K, V>;
