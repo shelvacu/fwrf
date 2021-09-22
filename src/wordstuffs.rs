@@ -462,8 +462,6 @@ pub mod dim_row {
         map.rows_mut()
     }
 
-    pub fn size() -> usize { WORD_SQUARE_WIDTH }
-
     pub fn index_tuple<T,U>(t: &(T, U)) -> &T {
         &t.0
     }
@@ -521,8 +519,6 @@ pub mod dim_col {
     pub fn prefix_map_mut(_map: &mut WordPrefixMap) -> &mut TheMap<Word,CharSet> {
         unreachable!()
     }
-
-    pub fn size() -> usize { WORD_SQUARE_HEIGHT }
 
     pub fn index_tuple<T,U>(t: &(U, T)) -> &T {
         &t.1

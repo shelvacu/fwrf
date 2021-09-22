@@ -147,6 +147,44 @@ fn main() -> io::Result<()> {
         eprintln!("Starting.");
     }
 
+    let compute_func:Box<dyn 'static + Send + FnOnce(std::sync::mpsc::Receiver<WordMatrix>) -> Result<(), std::io::Error>>;
+    if fancy {
+        compute_func = Box::new(move |w2m_rx:std::sync::mpsc::Receiver<WordMatrix>| {
+            let mut minibuffer = String::new();
+            while let Ok(wm) = w2m_rx.recv() {
+                for row in RowIndex::all_values() {
+                    for col in ColIndex::all_values() {
+                        minibuffer.push(wm[MatrixIndex{row,col}].into():char);
+                    }
+                    minibuffer.push('\n');
+                }
+                println!("{}", minibuffer);
+                minibuffer.truncate(0);
+            }
+            Ok(())
+        })
+    } else {
+        compute_func = Box::new(move |w2m_rx:std::sync::mpsc::Receiver<WordMatrix>| {
+            let mut minibuffer = String::new();
+            let mut writer = std::io::BufWriter::with_capacity(1024*1024, std::io::stdout());
+            while let Ok(wm) = w2m_rx.recv() {
+                for row in RowIndex::all_values() {
+                    for col in ColIndex::all_values() {
+                        minibuffer.push(wm[MatrixIndex{row,col}].into():char);
+                    }
+                    if row < RowIndex::MAX {
+                        minibuffer.push('|');
+                    }
+                }
+                minibuffer.push('\n');
+                writer.write_all(minibuffer.as_bytes())?;
+                minibuffer.truncate(0);
+            }
+            writer.flush()?;
+            Ok(())
+        })
+    }
+
     let mut time = devtimer::DevTime::new_simple();
     time.start();
 
@@ -154,38 +192,7 @@ fn main() -> io::Result<()> {
         words.as_slice(),
         templates.as_slice(),
         num_threads as usize,
-        move |w2m_rx| {
-            let mut minibuffer = String::new();
-            if fancy {
-                while let Ok(wm) = w2m_rx.recv() {
-                    for row in RowIndex::all_values() {
-                        for col in ColIndex::all_values() {
-                            minibuffer.push(wm[MatrixIndex{row,col}].into():char);
-                        }
-                        minibuffer.push('\n');
-                    }
-                    println!("{}", minibuffer);
-                    minibuffer.truncate(0);
-                }
-            } else {
-                let mut writer = std::io::BufWriter::with_capacity(1024*1024, std::io::stdout());
-                while let Ok(wm) = w2m_rx.recv() {
-                    for row in RowIndex::all_values() {
-                        for col in ColIndex::all_values() {
-                            minibuffer.push(wm[MatrixIndex{row,col}].into():char);
-                        }
-                        if row < RowIndex::MAX {
-                            minibuffer.push('|');
-                        }
-                    }
-                    minibuffer.push('\n');
-                    writer.write_all(minibuffer.as_bytes())?;
-                    minibuffer.truncate(0);
-                }
-                writer.flush()?;
-            }
-            Ok(())
-        }
+        compute_func,
     );
 
     time.stop();
