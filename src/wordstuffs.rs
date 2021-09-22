@@ -42,6 +42,7 @@ impl<const N:usize> Word<N> {
     }
 }
 
+#[cfg(feature = "default-tests")]
 #[test]
 fn prefixes_work() {
     let pattern:Word<4> = "&&a&".try_into().unwrap();
@@ -57,6 +58,7 @@ fn prefixes_work() {
     assert_eq!(test_prefixes, expected_prefixes);
 }
 
+#[cfg(feature = "default-tests")]
 #[test]
 fn prefixes_work_degenerate() {
     let pattern:Word<4> = "&&&&".try_into().unwrap();
@@ -73,6 +75,7 @@ fn prefixes_work_degenerate() {
     assert_eq!(test_prefixes, expected_prefixes);
 }
 
+#[cfg(feature = "default-tests")]
 #[test]
 fn not_match() {
     let a:Word<5> = "&cb&&".try_into().unwrap();

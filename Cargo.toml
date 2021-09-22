@@ -71,4 +71,6 @@ height-13 = []
 height-14 = []
 height-15 = []
 
-default = ["width-8", "height-5", "charset-english-small"]
+default-tests = []
+
+default = ["width-5", "height-5", "charset-english-small", "square", "default-tests"]

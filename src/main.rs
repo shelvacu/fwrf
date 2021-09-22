@@ -271,19 +271,25 @@ fn outer_compute(
         let a = &*prefix_map_arc;
         let m = MatrixIndex{row: 1usize.try_into().unwrap(), col: 0usize.try_into().unwrap()};
         let f = |ca| m2w_tx.send(ca).unwrap();
+        if DEBUG { dbg!(); }
         compute(
             a,
             *template,
             m,
             f,
         );
+        if DEBUG { dbg!(); }
 
         drop(m2w_tx);
         for h in worker_handles {
             h.join().unwrap();
         }
+        if DEBUG { dbg!(); }
     }
+    if DEBUG { dbg!(); }
+    drop(w2m_tx);
     output_thread.join().unwrap().unwrap();
+    if DEBUG { dbg!(); }
 }
 
 // It is assumed that this function does *not* need to be fast, and should be written in whatever way is reasonably fast and most correct and elegant.
@@ -360,9 +366,9 @@ fn compute<F: FnMut(WordMatrix)>(
     }
 
     loop {
-        if DEBUG {
-            dbg!(at_idx,matrix);
-        }
+        // if DEBUG {
+        //     dbg!(at_idx,matrix);
+        // }
         if is_nullish[at_idx] && orig_matrix[at_idx] == NULL_CHAR {
             let (row_set, col_set) = each_dimension!(dim, {
                 dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).copied().unwrap_or_default()
@@ -391,6 +397,7 @@ fn compute<F: FnMut(WordMatrix)>(
         if charset_array[at_idx].has(matrix[at_idx]) {
             let next = at_idx.inc();
             if next == target_idx.inc() {
+                if DEBUG { dbg!(); }
                 (&mut on_result)(matrix);
             } else if let Some(i) = next {
                 at_idx = i;
@@ -426,6 +433,7 @@ mod test {
             }
             m
         }).collect();
+        if DEBUG { dbg!(); }
 
         expected_results.sort();
 
@@ -433,6 +441,7 @@ mod test {
         let must_use:Vec<EitherWord> = must_use_str.iter().map(|&s| s.try_into().unwrap()).collect();
         let templates:Vec<WordMatrix> = make_templates(must_use.as_slice(),vec![Default::default()]);
         let results_mutex = Arc::new(Mutex::new(Vec::new()));
+        if DEBUG { dbg!(); }
 
         let their_results_mutex = Arc::clone(&results_mutex);
         outer_compute(
@@ -441,20 +450,25 @@ mod test {
             1,
             move |rx| {
                 let mut results_lock = their_results_mutex.lock().unwrap();
+                if DEBUG { dbg!(); }
                 while let Ok(ws) = rx.recv() { results_lock.push(ws); }
                 drop(results_lock);
                 drop(their_results_mutex);
+                if DEBUG { dbg!(); }
                 Ok(())
             }
         );
+        if DEBUG { dbg!(); }
 
         let mut lock = results_mutex.lock().unwrap();
         let mut results = Vec::new();
+        if DEBUG { dbg!(); }
         std::mem::swap(&mut results, &mut lock);
         drop(lock);
         drop(results_mutex);
 
         results.sort();
+        if DEBUG { dbg!(); }
 
         assert_eq!(results, expected_results);
     }
@@ -462,6 +476,7 @@ mod test {
     #[cfg(all(feature = "width-5", feature = "height-5"))]
     #[test]
     fn sator_square() {
+        if DEBUG { dbg!(); }
         assert_results(
             &["sator","arepo","opera","rotas","tenet"],
             &[],
@@ -472,7 +487,14 @@ mod test {
                     "tenet",
                     "opera",
                     "rotas",
-                ]
+                ],
+                &[
+                    "rotas",
+                    "opera",
+                    "tenet",
+                    "arepo",
+                    "sator",
+                ],
             ],
         );
     }
