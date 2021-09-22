@@ -363,13 +363,11 @@ fn compute<F: FnMut(WordMatrix)>(
         if DEBUG {
             dbg!(at_idx,matrix);
         }
-        if is_nullish[at_idx] {
-            if orig_matrix[at_idx] == NULL_CHAR {
-                let (row_set, col_set) = each_dimension!(dim, {
-                    dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).map(|c| *c).unwrap_or_default()
-                });
-                charset_array[at_idx] = row_set.and(col_set);
-            }
+        if is_nullish[at_idx] && orig_matrix[at_idx] == NULL_CHAR {
+            let (row_set, col_set) = each_dimension!(dim, {
+                dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).map(|c| *c).unwrap_or_default()
+            });
+            charset_array[at_idx] = row_set.and(col_set);
         }
 
         if orig_matrix[at_idx] == NULL_CHAR || !is_nullish[at_idx] {
