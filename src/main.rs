@@ -35,7 +35,7 @@ fn main() -> io::Result<()> {
             .validator(|arg| {
                 match arg.parse::<u32>() {
                     Ok(_) => Ok(()),
-                    Err(e) => Err(String::from(format!("Must provide a valid integer. {:?}", e))),
+                    Err(e) => Err(format!("Must provide a valid integer. {:?}", e)),
                 }
             })
             .help("Number of threads to use.")
@@ -81,7 +81,7 @@ fn main() -> io::Result<()> {
     let fancy = args.is_present("fancy-output");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
     
-    let must_include_strings:Vec<String> = args.value_of("must-include").map(|s| s.split(",").map(str::to_string).collect()).unwrap_or_default();
+    let must_include_strings:Vec<String> = args.value_of("must-include").map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default();
 
     let mut must_include:Vec<EitherWord> = Vec::new();
 
@@ -235,7 +235,7 @@ fn outer_compute(
     let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(128);
     let output_thread = std::thread::spawn(move || output_func(w2m_rx));
     for template in templates {
-        let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist.iter().map(|v| *v));
+        let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist.iter().copied());
 
         each_unique_dimension!(dim, {
             if dim::prefix_map(&prefix_map).is_empty() {
@@ -365,7 +365,7 @@ fn compute<F: FnMut(WordMatrix)>(
         }
         if is_nullish[at_idx] && orig_matrix[at_idx] == NULL_CHAR {
             let (row_set, col_set) = each_dimension!(dim, {
-                dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).map(|c| *c).unwrap_or_default()
+                dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).copied().unwrap_or_default()
             });
             charset_array[at_idx] = row_set.and(col_set);
         }

@@ -1,20 +1,14 @@
 use crate::config::*;
 use crate::echar::EncodedChar;
 
-#[derive(Debug,Clone,Copy,Eq,PartialEq)]
+#[derive(Debug,Clone,Copy,Eq,PartialEq,Default)]
 pub struct CharSet(CharSetInner);
-
-impl Default for CharSet {
-    fn default() -> Self {
-        Self(0)
-    }
-}
 
 impl CharSet {
     pub fn set(&mut self, e: EncodedChar) {
         let inner = e.inner();
         if inner >= CHAR_SET_SIZE { panic!("invalid echar to set on charset {:?}", e) }
-        self.0 = self.0 | (1 << inner);
+        self.0 |= 1 << inner;
     }
 
     pub fn has(&self, e: EncodedChar) -> bool {

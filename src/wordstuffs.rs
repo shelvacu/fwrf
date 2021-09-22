@@ -111,6 +111,8 @@ impl<const N:usize> TryFrom<&str> for Word<N> {
         let mut res:Self = Default::default();
         let chars:Vec<_> = input.chars().collect();
         if chars.len() != N { return Err(WordConversionError::WrongLength) }
+        //Gonna have to straight disagree with clippy here, this is the clearer way to do this
+        #[allow(clippy::needless_range_loop)]
         for i in 0..N {
             res.0[i] = match chars[i].try_into() {
                 Ok(v) => v,
@@ -150,7 +152,7 @@ impl TryFrom<&str> for EitherWord {
             Err(e @ WordConversionError::UnencodeableChar(_,_)) => return Err(e),
             Err(WordConversionError::WrongLength) => (),
         }
-        WideWord::try_from(input).map(|w| Self::from(w))
+        WideWord::try_from(input).map(Self::from)
     }
 }
 
