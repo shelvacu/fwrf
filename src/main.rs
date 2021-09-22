@@ -65,7 +65,7 @@ fn main() -> io::Result<()> {
             .long("must-include")
             .short("m")
             .takes_value(true)
-            .help("Only search for word rectangles that include all of the given comma-separated words.")
+            .help("Only search for word rectangles that include all of the given comma-separated words. These words are automatically added to the wordlist.")
         )
         .arg(Arg::with_name("fancy-output")
             .long("fancy-output")
@@ -80,6 +80,23 @@ fn main() -> io::Result<()> {
     let ignore_unencodeable = args.is_present("ignore-unencodeable");
     let fancy = args.is_present("fancy-output");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
+
+    let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
+
+    let mut words = Vec::new();
+
+    for maybe_line in f.lines() {
+        let line = maybe_line.unwrap();
+        match line.as_str().try_into():Result<EitherWord, _> {
+            Ok(w) => words.push(w),
+            Err(WordConversionError::WrongLength) => (),
+            Err(e) => {
+                if !ignore_unencodeable {
+                    panic!("Could not encode {:?} due to {:?}", &line, e);
+                }
+            }
+        }
+    }
     
     let must_include_strings:Vec<String> = args.value_of("must-include").map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default();
 
@@ -87,7 +104,10 @@ fn main() -> io::Result<()> {
 
     for include_str in &must_include_strings {
         match include_str.as_str().try_into():Result<EitherWord, _> {
-            Ok(word) => must_include.push(word),
+            Ok(word) => {
+                must_include.push(word);
+                words.push(word);
+            },
             Err(WordConversionError::WrongLength) => {
                 if ignore_empty_wordlist {
                     std::process::exit(0);
@@ -120,23 +140,6 @@ fn main() -> io::Result<()> {
     if loud {
         eprintln!("Word rectangle order {}x{}", config::WORD_SQUARE_WIDTH, config::WORD_SQUARE_HEIGHT);
         eprintln!("Start: creating index");
-    }
-
-    let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
-
-    let mut words = Vec::new();
-
-    for maybe_line in f.lines() {
-        let line = maybe_line.unwrap();
-        match line.as_str().try_into():Result<EitherWord, _> {
-            Ok(w) => words.push(w),
-            Err(WordConversionError::WrongLength) => (),
-            Err(e) => {
-                if !ignore_unencodeable {
-                    panic!("Could not encode {:?} due to {:?}", &line, e);
-                }
-            }
-        }
     }
 
     if !ignore_empty_wordlist && words.is_empty() {
