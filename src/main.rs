@@ -272,13 +272,23 @@ fn outer_compute(
         }
 
         let a = &*prefix_map_arc;
-        let m = MatrixIndex{row: 1usize.try_into().unwrap(), col: 0usize.try_into().unwrap()};
+        let mut mi = MatrixIndex::ZERO;
+        {
+            let mut nulls_so_far = 0;
+            while nulls_so_far < config::WORD_SQUARE_WIDTH {
+                if template[mi] == NULL_CHAR { nulls_so_far += 1 }
+                mi = match mi.inc() {
+                    Some(v) => v,
+                    None => break,
+                }
+            }
+        }
         let f = |ca| m2w_tx.send(ca).unwrap();
         if DEBUG { dbg!(); }
         compute(
             a,
             *template,
-            m,
+            mi,
             f,
         );
         if DEBUG { dbg!(); }
