@@ -2,7 +2,35 @@
 
 It stands for [Fresco](https://en.wikipedia.org/wiki/Fresco) Worker's Raging Frosty, or **Fast Word Rectangle Finder** in polite company.
 
-## Info
+### Build and Run
+
+If you haven't already, install rust nightly with [rustup](https://rustup.rs/).
+
+To allow for more compiler optimizations, **each size of square is a different binary and requires a different command**. The quick version is to just run `./make-bins.sh` to get a bunch of binaries in the `bin` directory. This script builds sizes from 2x2 to 15x15.
+
+Then, if you're searching for a rectangle of a specific size, the binary name is `bin/fwrf-`WIDTH`x`HEIGHT, where WIDTH is always the larger dimension. run `bin/fwrf-5x5 --help` for options, and run with a wordlist to start processing.
+
+If you're searching for *all* sizes of word square, `./run-bins.sh` is a handy script to run all the binaries for each size from 2x2 to 15x15. It passes all options to each `fwrf` binary.
+
+### Manual build/Features
+
+The default features are designed to make development and testing easier. To build your own binary, you need the following features:
+
+    * `width-X`, where X is a number between 2 and 15, such as `width-5`
+    * `height-X`, where X is a number between 2 and 15, such as `height-6`
+    * Exactly one of `charset-english-extended` or `charset-english-small`. "Small" includes letters a-z, a few symbols, and 'é'; "Extended" includes letters a-z, numerals 0-9, a few letters with diacritics, and more symbols
+    * `square` **if and only if** width and height are the same. This is needed due to some limitations in rust's const generics.
+
+Additionally, there is one optional feature:
+
+    * `unchecked`, which enables a lot of unsafe code but should allow for more compiler optimizations. If the program runs with no panics while this feature is off, then it should run without any UB when this feature is on.
+    * `do-debug`, which enables some (very noisy) output only intended for debugging purposes.
+
+So, to build a binary using the small english character set to find 5x8 word rectangles with unsafe code enabled, run:
+
+    cargo +nightly build --release --no-default-features --features width-8,height-5,charset-english-small,unchecked
+
+-----
 
 ### Word Squares
 
@@ -63,10 +91,10 @@ To do the actual solving, we have a recursive function which takes in a partiall
 
 For example, given a partially completed matrix like this:
 
-|:M:|:O:|:M:|
-|:O:|:R:|:*:|
-|:.:|:.:|:.:|
-|:.:|:.:|:.:|
+|: M :|: O :|: M :|
+|: O :|: R :|: * :|
+|: . :|: . :|: . :|
+|: . :|: . :|: . :|
 
 Where `.`s are empty spaces, and `*` is the next empty space.
 
@@ -96,6 +124,39 @@ Liberal use is made of static-size arrays and ranged ints to make safe unchecked
 For the prefix map, static arrays of the word length are used with the remaining elements filled in with `NULL_CHAR`, so `prefix_map.get(&[EncodedChar('a'), NULL_CHAR, NULL_CHAR])` gets the `CharSet` of next possible characters for all words that start with 'a' in a 3-letter-word prefix map.
 
 The `compute` function is "flattened out", so no recursion happens and it's just a simple loop. You can think of the working matrix and associated list of CharSets as the stack, and `at_idx` as the stack pointer.
+
+### `--must-include` Implementation Details
+
+Part of the goal of adding `--must-include` was to make the search much, much faster by not bothering to search matrixes that couldn't possibly contain the `must-include` words.
+
+First, we build a list of "templates", which is every way the entire set of `must-include` words can be arranged onto the matrix. Take for example SEWER and WET, which can be arranged three ways on a 5x3:
+
+```
+1.
+SEWER
+**E**
+**T**
+
+2.
+*W***
+SEWER
+*T***
+
+3.
+***W*
+SEWER
+***T*
+```
+
+Then, for each template a different prefix map is created, although the name "prefix map" doesn't make as much sense anymore. This is because the key can include letters *after* the prefix. Thus, `some_prefix_map[NULL_CHAR, NULL_CHAR, EncodedChar('t')]` returns a CharSet of all letters that could 'fill in' the first NULL_CHAR, which is the set of all first characters of {3-letter words that end with 't'}.
+
+Words are added to the prefix map only if they "fit" in one of the rows or columns of the template matrix.
+
+Thus, prefix maps can be significantly smaller, which is particularly helpful if it allows it to fit in L2 cache rather than L3 cache, for example.
+
+Prefix maps can also be slightly larger; This is necessary to keep the same speed and allow the hot path to use nearly the same algorithm.
+
+When calling `compute`, each template/prefix map is passed in turn. `compute` keeps a copy of the matrix originally passed in, and "skips over" any values that aren't `NULL_CHAR` in the original matrix.
 
 ## Previous Iterations
 
