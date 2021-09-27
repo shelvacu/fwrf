@@ -91,11 +91,12 @@ To do the actual solving, we have a recursive function which takes in a partiall
 
 For example, given a partially completed matrix like this:
 
-| M | O | M |
-|:-:|:-:|:-:|
-| O | R | * |
-| . | . | . |
-| . | . | . |
+<table>
+<tr><td align="center">M</td><td align="center">O</td><td align="center">M</td></tr>
+<tr><td align="center">O</td><td align="center">R</td><td align="center">*</td></tr>
+<tr><td align="center">.</td><td align="center">.</td><td align="center">.</td></tr>
+<tr><td align="center">.</td><td align="center">.</td><td align="center">.</td></tr>
+</table>
 
 Where `.`s are empty spaces, and `*` is the next empty space.
 
