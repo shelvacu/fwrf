@@ -14,17 +14,17 @@ If you're searching for *all* sizes of word square, `./run-bins.sh` is a handy s
 
 ### Manual build/Features
 
-The default features are designed to make development and testing easier. To build your own binary, you need the following features:
+The default features are designed to make development and testing easier, and aren't necessarily sensible defaults for running normally. To build your own binary, you need the following features:
 
-    * `width-X`, where X is a number between 2 and 15, such as `width-5`
-    * `height-X`, where X is a number between 2 and 15, such as `height-6`
-    * Exactly one of `charset-english-extended` or `charset-english-small`. "Small" includes letters a-z, a few symbols, and 'é'; "Extended" includes letters a-z, numerals 0-9, a few letters with diacritics, and more symbols
-    * `square` **if and only if** width and height are the same. This is needed due to some limitations in rust's const generics.
+  * `width-X`, where X is a number between 2 and 15, such as `width-5`
+  * `height-X`, where X is a number between 2 and 15, such as `height-6`
+  * Exactly one of `charset-english-extended` or `charset-english-small`. "Small" includes letters a-z, a few symbols, and 'é'; "Extended" includes letters a-z, numerals 0-9, a few letters with diacritics, and more symbols
+  * `square` **if and only if** width and height are the same. This is needed due to some limitations in rust's const generics.
 
-Additionally, there is one optional feature:
+Additionally, there are two optional features:
 
-    * `unchecked`, which enables a lot of unsafe code but should allow for more compiler optimizations. If the program runs with no panics while this feature is off, then it should run without any UB when this feature is on.
-    * `do-debug`, which enables some (very noisy) output only intended for debugging purposes.
+  * `unchecked`, which enables a lot of unsafe code but should allow for more compiler optimizations. If the program runs with no panics while this feature is off, then it should run without any UB when this feature is on.
+  * `do-debug`, which enables some (very noisy) output only intended for debugging purposes.
 
 So, to build a binary using the small english character set to find 5x8 word rectangles with unsafe code enabled, run:
 
@@ -44,7 +44,7 @@ R E S I N
 T R E N D
 ```
 
-Of course, the words need not be the same in both directions, such as:
+The words do not need to be the same in both directions, such as:
 
 ```
 P O M A D E
@@ -55,7 +55,7 @@ A G E N D A
 H E D G E S
 ```
 
-[Pomade](https://en.wikipedia.org/wiki/Pomade) is a type of hair gel, to "rankle" is to "cause annoyance or resentment that persists", and [Indium](https://en.wikipedia.org/wiki/Indium) is a chemical element.
+<small>[Pomade](https://en.wikipedia.org/wiki/Pomade) is a type of hair gel, to "rankle" is to "cause annoyance or resentment that persists", and [Indium](https://en.wikipedia.org/wiki/Indium) is a chemical element.</small>
 
 [The wikipedia article on word squares](https://en.wikipedia.org/wiki/Word_square) calls these "word squares" and "double word squares" respectively.
 
