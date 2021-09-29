@@ -63,7 +63,8 @@ macro_rules! encoded_char_impls {
             type Error = UnencodeableChar;
 
             #[forbid(unreachable_patterns)]
-            fn try_from(value: char) -> Result<Self, Self::Error> {
+            fn try_from(mut value: char) -> Result<Self, Self::Error> {
+                value.make_ascii_lowercase();
                 match value {
                     $(
                         $char => Ok(Self($codepoint)),

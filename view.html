@@ -26,7 +26,7 @@
     </table>
     <script>
         let the_thing = document.getElementById("the-thing");
-        window.location.search.slice(1).split("-").forEach(word => {
+        window.location.search.slice(1).split("|").forEach(word => {
             let tr = document.createElement("tr");
             word.split("").forEach(c => {
                 let td = document.createElement("td");

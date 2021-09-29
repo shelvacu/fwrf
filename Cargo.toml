@@ -21,7 +21,7 @@ features = ["std"]
 
 # These options trade some compile time for hopefully faster code.
 # Particularly lto = true and codegen-units = 1
-[profile.dev]
+[profile.release]
 opt-level = 3
 debug = false
 overflow-checks = false
