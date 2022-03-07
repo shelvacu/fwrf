@@ -537,7 +537,7 @@ mod test {
 
     #[cfg(all(feature = "width-6", feature = "height-4"))]
     #[test]
-    fn fwrf_1() {
+    fn fwrf() {
         assert_results(
             &[
                 "fresco",
@@ -562,34 +562,6 @@ mod test {
             ]
         );
     }
-
-    #[cfg(all(feature = "width-6", feature = "height-4"))]
-    #[test]
-    fn fwrf_2() {
-        assert_results(
-            &[
-                "fresco",
-                "worker",
-                "raging",
-                "frosty",
-                "roar",
-                "ergo",
-                "skis",
-                "cent",
-                "orgy",
-            ],
-            &[
-                "fwrf",
-            ],
-            &[
-                &[
-                    "fresco",
-                    "worker",
-                    "raging",
-                    "frosty",
-                ]
-            ]
-        );
 
     #[cfg(all(feature = "width-4", feature = "height-2"))]
     #[test]

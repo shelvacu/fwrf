@@ -114,7 +114,7 @@ Note that the intersection of the two sets may be empty. That's just a "dead end
 
 ### Actual Implementation Details
 
-In the interest of SPEED, the actual code works a bit differently. The `CharSet` type is a HashSet in spirit, but a `u32`-backed bitmap in practice (thus set intersection becomes a bitwise and). This means that there is a limit of 32 possible values. These are represented as 0..32 in a `u8`, in a wrapper called `EncodedChar`. There's also a special null value, 255. An `Option<_>` is not used because:
+In the interest of SPEED, the actual code works a bit differently. The `CharSet` type is a HashSet in spirit, but a uint-backed bitmap in practice (thus set intersection becomes a bitwise and). This means that there is a limit of 32, 64, or 128 possible values. These are represented as 0..128 in a `u8`, in a wrapper called `EncodedChar`. There's also a special null value, 255. An `Option<_>` is not used because:
 
 1. I want the value to fit in one byte.
 2. I want to be able to set the Nth bit in a CharSet(u32) without an extra addition step, which means 0 must be used for one of the meaningful values, and so I cannot use a `NonZeroU8`.
