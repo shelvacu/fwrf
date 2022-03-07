@@ -11,6 +11,7 @@ fnv = "1.0.7"
 clap = "2.33.3"
 crossbeam-channel = "0.5"
 devtimer = "4.0"
+progressing = "3.0.2"
 
 [dependencies.deranged]
 git = "https://github.com/shelvacu/deranged"

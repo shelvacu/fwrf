@@ -183,6 +183,12 @@ impl EitherWord {
     pub fn wide(self) -> Option<WideWord> {
         Some(match self {Self::Tall(v) => v})
     }
+
+    #[allow(dead_code)]
+    pub fn is_tall(self) -> bool { true }
+
+    #[allow(dead_code)]
+    pub fn is_wide(self) -> bool { true }
 }
 
 #[cfg(not(feature = "square"))]
@@ -199,6 +205,16 @@ impl EitherWord {
             Self::Tall(_) => None,
             Self::Wide(v) => Some(v),
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn is_tall(self) -> bool {
+        matches!(self, Self::Tall(_))
+    }
+
+    #[allow(dead_code)]
+    pub fn is_wide(self) -> bool {
+        matches!(self, Self::Wide(_))
     }
 }
 

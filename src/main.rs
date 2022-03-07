@@ -10,6 +10,13 @@ use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::fs::File;
 
+use progressing::{
+    // The underlying Trait
+    Baring,
+    // Just handy names for the examples below
+    bernoulli::Bar as BernoulliBar,
+};
+
 use clap::{
     App,
     Arg
@@ -61,6 +68,11 @@ fn main() -> io::Result<()> {
             .short("q")
             .help("Don't show any status messages; STDERR will be empty if no errors/warnings occured. (See also --ignore-*)")
         )
+        .arg(Arg::with_name("show-progress")
+            .long("show-progress")
+            .short("p")
+            .help("Show a progress bar on STDERR")
+        )
         .arg(Arg::with_name("must-include")
             .long("must-include")
             .short("m")
@@ -79,6 +91,7 @@ fn main() -> io::Result<()> {
     let ignore_empty_wordlist = args.is_present("ignore-empty-wordlist");
     let ignore_unencodeable = args.is_present("ignore-unencodeable");
     let fancy = args.is_present("fancy-output");
+    let show_progress = args.is_present("show-progress");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
 
     let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
@@ -98,7 +111,14 @@ fn main() -> io::Result<()> {
         }
     }
     
-    let must_include_strings:Vec<String> = args.value_of("must-include").map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default();
+    let must_include_strings:Vec<String> = args
+        .value_of("must-include")
+        .map(|s| s
+            .split(',')
+            .map(str::to_string)
+            .collect()
+        )
+        .unwrap_or_default();
 
     // This is purposefully *not* a hashset, a word that appears twice in the must_include list must appear twice in any result word rectangles.
     let mut must_include:Vec<EitherWord> = Vec::new();
@@ -123,6 +143,11 @@ fn main() -> io::Result<()> {
     }
 
     assert_eq!(must_include.len(), must_include_strings.len());
+
+    if show_progress && !must_include.is_empty() {
+        eprintln!("ERR: Cannot use both show-progress and must-use together.");
+        std::process::exit(1);
+    }
 
     let templates:Vec<WordMatrix> = make_templates(must_include.as_slice(),vec![Default::default()]);
 
@@ -194,6 +219,7 @@ fn main() -> io::Result<()> {
         templates.as_slice(),
         num_threads as usize,
         compute_func,
+        show_progress,
     );
 
     time.stop();
@@ -231,17 +257,29 @@ fn outer_compute(
     templates: &[WordMatrix],
     num_threads: usize,
     output_func: impl 'static + Send + FnOnce(std::sync::mpsc::Receiver<WordMatrix>) -> Result<(), std::io::Error>,
+    show_progress: bool,
 ) {
     use std::sync::Arc;
+    let count = if show_progress {
+        wordlist.iter().filter(|w| w.is_wide()).count() + 2
+    } else { 0 };
+    let mut progress_bar = BernoulliBar::with_goal(count).timed();
+    // let mut progress_bar = MappingBar::with(
+    //     MappingConfig{
+    //         bar_len: 30,
+    //         style: "[->.]".to_string(),
+    //         interesting_progress_step: 0.
+    //     }
+    // )
     let wordlist_arc = Arc::new(wordlist);
     // "w2m" => worker threads to output thread
-    let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(128);
+    let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(4);
     let output_thread = std::thread::spawn(move || output_func(w2m_rx));
     for template in templates {
         let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist_arc.iter().copied());
 
         // "m2w" => main thread to worker threads
-        let (m2w_tx, m2w_rx) = crossbeam_channel::bounded::<WordMatrix>(128);
+        let (m2w_tx, m2w_rx) = crossbeam_channel::bounded::<WordMatrix>(2);
         let mut worker_handles = Vec::new();
 
         let prefix_map_arc = Arc::new(prefix_map);
@@ -280,7 +318,7 @@ fn outer_compute(
         let mut mi = MatrixIndex::ZERO;
         {
             let mut nulls_so_far = 0;
-            while nulls_so_far < config::WORD_SQUARE_WIDTH {
+            while nulls_so_far < config::WORD_SQUARE_WIDTH-1 {
                 if template[mi] == NULL_CHAR { nulls_so_far += 1 }
                 mi = match mi.inc() {
                     Some(v) => v,
@@ -288,7 +326,22 @@ fn outer_compute(
                 }
             }
         }
-        let f = |ca| m2w_tx.send(ca).unwrap();
+        if DEBUG { dbg!(mi); }
+        if show_progress {
+            eprintln!("{}", progress_bar);
+        }
+        let mut last_progress_display = std::time::Instant::now();
+        let f = |ca| {
+            if DEBUG { dbg!(ca); }
+            m2w_tx.send(ca).unwrap();
+            if show_progress {
+                progress_bar.add(true);
+                if last_progress_display.elapsed().as_secs() >= 1 {
+                    last_progress_display = std::time::Instant::now();
+                    eprintln!("{}", progress_bar);
+                }
+            }
+        };
         if DEBUG { dbg!(); }
         compute(
             a,
@@ -307,6 +360,9 @@ fn outer_compute(
     if DEBUG { dbg!(); }
     drop(w2m_tx);
     output_thread.join().unwrap().unwrap();
+    if show_progress {
+        eprintln!("{}", progress_bar);
+    }
     if DEBUG { dbg!(); }
 }
 
@@ -474,7 +530,8 @@ mod test {
                 drop(their_results_mutex);
                 if DEBUG { dbg!(); }
                 Ok(())
-            }
+            },
+            false,
         );
         if DEBUG { dbg!(); }
 
