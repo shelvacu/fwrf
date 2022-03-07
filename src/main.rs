@@ -147,9 +147,8 @@ fn main() -> io::Result<()> {
         eprintln!("Starting.");
     }
 
-    let compute_func:Box<dyn 'static + Send + FnOnce(std::sync::mpsc::Receiver<WordMatrix>) -> Result<(), std::io::Error>>;
-    if fancy {
-        compute_func = Box::new(move |w2m_rx:std::sync::mpsc::Receiver<WordMatrix>| {
+    let compute_func = move |w2m_rx:std::sync::mpsc::Receiver<WordMatrix>| {
+        if fancy {
             let mut minibuffer = String::new();
             while let Ok(wm) = w2m_rx.recv() {
                 for row in RowIndex::all_values() {
@@ -162,9 +161,7 @@ fn main() -> io::Result<()> {
                 minibuffer.truncate(0);
             }
             Ok(())
-        })
-    } else {
-        compute_func = Box::new(move |w2m_rx:std::sync::mpsc::Receiver<WordMatrix>| {
+        } else {
             let mut minibuffer = String::new();
             let mut writer = std::io::BufWriter::with_capacity(1024*1024, std::io::stdout());
             while let Ok(wm) = w2m_rx.recv() {
@@ -182,8 +179,8 @@ fn main() -> io::Result<()> {
             }
             writer.flush()?;
             Ok(())
-        })
-    }
+        }
+    };
 
     let mut time = devtimer::DevTime::new_simple();
     time.start();
@@ -496,6 +493,81 @@ mod test {
                     "sator",
                 ],
             ],
+        );
+    }
+
+    #[cfg(all(feature = "width-5", feature = "height-5"))]
+    #[test]
+    fn aaaaa() {
+        assert_results(
+            &["aaaaa"], 
+            &[],
+            &[
+                &[
+                    "aaaaa",
+                    "aaaaa",
+                    "aaaaa",
+                    "aaaaa",
+                    "aaaaa",
+                ]
+            ]
+        );
+    }
+
+    #[cfg(all(feature = "width-6", feature = "height-4"))]
+    #[test]
+    fn fwrf_1() {
+        assert_results(
+            &[
+                "fresco",
+                "worker",
+                "raging",
+                "frosty",
+                "fwrf",
+                "roar",
+                "ergo",
+                "skis",
+                "cent",
+                "orgy",
+            ],
+            &[],
+            &[
+                &[
+                    "fresco",
+                    "worker",
+                    "raging",
+                    "frosty",
+                ]
+            ]
+        );
+    }
+
+    #[cfg(all(feature = "width-6", feature = "height-4"))]
+    #[test]
+    fn fwrf_2() {
+        assert_results(
+            &[
+                "fresco",
+                "worker",
+                "raging",
+                "frosty",
+                "roar",
+                "ergo",
+                "skis",
+                "cent",
+                "orgy",
+            ],
+            &[
+                "fwrf",
+            ],
+            &[
+                &[
+                    "fresco",
+                    "worker",
+                    "raging",
+                    "frosty",
+                ]
+            ]
         );
     }
 }
