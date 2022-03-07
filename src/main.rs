@@ -65,7 +65,7 @@ fn main() -> io::Result<()> {
             .long("must-include")
             .short("m")
             .takes_value(true)
-            .help("Only search for word rectangles that include all of the given comma-separated words.")
+            .help("Only search for word rectangles that include all of the given comma-separated words. These words are automatically added to the wordlist.")
         )
         .arg(Arg::with_name("fancy-output")
             .long("fancy-output")
@@ -80,14 +80,35 @@ fn main() -> io::Result<()> {
     let ignore_unencodeable = args.is_present("ignore-unencodeable");
     let fancy = args.is_present("fancy-output");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
+
+    let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
+
+    let mut words:TheSet<EitherWord> = Default::default();
+
+    for maybe_line in f.lines() {
+        let line = maybe_line.unwrap();
+        match line.as_str().try_into():Result<EitherWord, _> {
+            Ok(w) => { words.insert(w); },
+            Err(WordConversionError::WrongLength) => (),
+            Err(e) => {
+                if !ignore_unencodeable {
+                    panic!("Could not encode {:?} due to {:?}", &line, e);
+                }
+            }
+        }
+    }
     
     let must_include_strings:Vec<String> = args.value_of("must-include").map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default();
 
+    // This is purposefully *not* a hashset, a word that appears twice in the must_include list must appear twice in any result word rectangles.
     let mut must_include:Vec<EitherWord> = Vec::new();
 
     for include_str in &must_include_strings {
         match include_str.as_str().try_into():Result<EitherWord, _> {
-            Ok(word) => must_include.push(word),
+            Ok(word) => {
+                must_include.push(word);
+                words.insert(word);
+            },
             Err(WordConversionError::WrongLength) => {
                 if ignore_empty_wordlist {
                     std::process::exit(0);
@@ -120,23 +141,6 @@ fn main() -> io::Result<()> {
     if loud {
         eprintln!("Word rectangle order {}x{}", config::WORD_SQUARE_WIDTH, config::WORD_SQUARE_HEIGHT);
         eprintln!("Start: creating index");
-    }
-
-    let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
-
-    let mut words = Vec::new();
-
-    for maybe_line in f.lines() {
-        let line = maybe_line.unwrap();
-        match line.as_str().try_into():Result<EitherWord, _> {
-            Ok(w) => words.push(w),
-            Err(WordConversionError::WrongLength) => (),
-            Err(e) => {
-                if !ignore_unencodeable {
-                    panic!("Could not encode {:?} due to {:?}", &line, e);
-                }
-            }
-        }
     }
 
     if !ignore_empty_wordlist && words.is_empty() {
@@ -186,7 +190,7 @@ fn main() -> io::Result<()> {
     time.start();
 
     outer_compute(
-        words.as_slice(),
+        words,
         templates.as_slice(),
         num_threads as usize,
         compute_func,
@@ -223,34 +227,31 @@ fn make_templates(
 }
 
 fn outer_compute(
-    wordlist: &[EitherWord],
+    wordlist: TheSet<EitherWord>,
     templates: &[WordMatrix],
     num_threads: usize,
     output_func: impl 'static + Send + FnOnce(std::sync::mpsc::Receiver<WordMatrix>) -> Result<(), std::io::Error>,
 ) {
+    use std::sync::Arc;
+    let wordlist_arc = Arc::new(wordlist);
     // "w2m" => worker threads to output thread
     let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(128);
     let output_thread = std::thread::spawn(move || output_func(w2m_rx));
     for template in templates {
-        let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist.iter().copied());
-
-        each_unique_dimension!(dim, {
-            if dim::prefix_map(&prefix_map).is_empty() {
-                continue;
-            }
-        });
+        let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist_arc.iter().copied());
 
         // "m2w" => main thread to worker threads
         let (m2w_tx, m2w_rx) = crossbeam_channel::bounded::<WordMatrix>(128);
         let mut worker_handles = Vec::new();
 
-        let prefix_map_arc = std::sync::Arc::new(prefix_map);
+        let prefix_map_arc = Arc::new(prefix_map);
 
         
         for _ in 0..num_threads {
             let rxc = m2w_rx.clone();
             let txc = w2m_tx.clone();
-            let my_prefix_map = std::sync::Arc::clone(&prefix_map_arc);
+            let my_prefix_map = Arc::clone(&prefix_map_arc);
+            let my_wordlist = Arc::clone(&wordlist_arc);
             worker_handles.push(
                 std::thread::spawn( move || {
                     while let Ok(msg) = rxc.recv() {
@@ -258,7 +259,17 @@ fn outer_compute(
                             &my_prefix_map,
                             msg,
                             MatrixIndex{row: RowIndex::MAX, col: ColIndex::MAX},
-                            |a| txc.send(a).unwrap()
+                            |a| {
+                                each_dimension!(dim, {
+                                    for i in dim::Index::all_values() {
+                                        let word = dim::index_matrix(a, i);
+                                        if !my_wordlist.contains(&word.into()) {
+                                            return
+                                        }
+                                    }
+                                });
+                                txc.send(a).unwrap();
+                            }
                         );
                     }
                 })
@@ -266,13 +277,23 @@ fn outer_compute(
         }
 
         let a = &*prefix_map_arc;
-        let m = MatrixIndex{row: 1usize.try_into().unwrap(), col: 0usize.try_into().unwrap()};
+        let mut mi = MatrixIndex::ZERO;
+        {
+            let mut nulls_so_far = 0;
+            while nulls_so_far < config::WORD_SQUARE_WIDTH {
+                if template[mi] == NULL_CHAR { nulls_so_far += 1 }
+                mi = match mi.inc() {
+                    Some(v) => v,
+                    None => break,
+                }
+            }
+        }
         let f = |ca| m2w_tx.send(ca).unwrap();
         if DEBUG { dbg!(); }
         compute(
             a,
             *template,
-            m,
+            mi,
             f,
         );
         if DEBUG { dbg!(); }
@@ -434,7 +455,7 @@ mod test {
 
         expected_results.sort();
 
-        let wordlist:Vec<EitherWord> = wordlist_str.iter().map(|&s| s.try_into().unwrap()).collect();
+        let wordlist:TheSet<EitherWord> = wordlist_str.iter().map(|&s| s.try_into().unwrap()).collect();
         let must_use:Vec<EitherWord> = must_use_str.iter().map(|&s| s.try_into().unwrap()).collect();
         let templates:Vec<WordMatrix> = make_templates(must_use.as_slice(),vec![Default::default()]);
         let results_mutex = Arc::new(Mutex::new(Vec::new()));
@@ -442,7 +463,7 @@ mod test {
 
         let their_results_mutex = Arc::clone(&results_mutex);
         outer_compute(
-            wordlist.as_slice(),
+            wordlist,
             templates.as_slice(),
             1,
             move |rx| {
@@ -569,5 +590,47 @@ mod test {
                 ]
             ]
         );
+
+    #[cfg(all(feature = "width-4", feature = "height-2"))]
+    #[test]
+    /// With no length 2 words available, this should never produce a result. This is a potential edge case because the templates will be completely filled.
+    fn must_use_fills_1() {
+        assert_results(
+            &["test", "word"],
+            &["test", "word"],
+            &[],
+        )
+    }
+
+    #[cfg(all(feature = "width-4", feature = "height-2"))]
+    #[test]
+    /// With some but not all length 2 words available, this should never produce a result. This is a potential edge case because the templates will be completely filled.
+    fn must_use_fills_2() {
+        assert_results(
+            &["test", "word", "tw", "sr", "td"],
+            &["test", "word"],
+            &[],
+        )
+    }
+
+    #[cfg(all(feature = "width-4", feature = "height-2"))]
+    #[test]
+    /// With length 2 words available, this should produce 1 result (test|word but not word|test). This is a potential edge case because the templates will be completely filled.
+    /// 
+    /// ```
+    /// TEST
+    /// WORD
+    /// ```
+    fn must_use_fills_3() {
+        assert_results(
+            &["test", "word", "tw", "eo", "sr", "td"],
+            &["test", "word"],
+            &[
+                &[
+                    "test",
+                    "word",
+                ],
+            ],
+        )
     }
 }

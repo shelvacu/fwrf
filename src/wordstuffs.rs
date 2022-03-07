@@ -131,7 +131,7 @@ impl<const N:usize> TryFrom<&str> for Word<N> {
 pub type TallWord = Word<WORD_SQUARE_HEIGHT>;
 pub type WideWord = Word<WORD_SQUARE_WIDTH>;
 
-#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash)]
 pub enum EitherWord {
     Tall(TallWord),
     #[cfg(not(feature = "square"))]
@@ -494,6 +494,8 @@ pub use dim_row as dim;
 type TheMap<K, V> = FnvHashMap<K, V>;
 #[cfg(feature = "btreemap")]
 type TheMap<K, V> = std::collections::BTreeMap<K, V>;
+
+pub type TheSet<V> = fnv::FnvHashSet<V>;
 
 #[derive(Debug,Default)]
 pub struct WordPrefixMap {
