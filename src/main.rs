@@ -5,15 +5,12 @@ mod echar;
 mod charset;
 mod wordstuffs;
 
-use std::convert::TryInto;
 use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::fs::File;
 
 use progressing::{
-    // The underlying Trait
     Baring,
-    // Just handy names for the examples below
     bernoulli::Bar as BernoulliBar,
 };
 
@@ -100,7 +97,7 @@ fn main() -> io::Result<()> {
 
     for maybe_line in f.lines() {
         let line = maybe_line.unwrap();
-        match line.as_str().try_into():Result<EitherWord, _> {
+        match EitherWord::from_str_no_nulls(line.as_str()) {
             Ok(w) => { words.insert(w); },
             Err(WordConversionError::WrongLength) => (),
             Err(e) => {
@@ -124,7 +121,7 @@ fn main() -> io::Result<()> {
     let mut must_include:Vec<EitherWord> = Vec::new();
 
     for include_str in &must_include_strings {
-        match include_str.as_str().try_into():Result<EitherWord, _> {
+        match EitherWord::from_str_with_nulls(include_str.as_str()) {
             Ok(word) => {
                 must_include.push(word);
                 words.insert(word);
@@ -138,7 +135,8 @@ fn main() -> io::Result<()> {
             },
             Err(e @ WordConversionError::UnencodeableChar(_,_)) => {
                 panic!("Error encoding must-use word {:?} due to {:?}", include_str, e);
-            }
+            },
+            Err(WordConversionError::NullChar) => unreachable!(),
         }
     }
 
@@ -260,17 +258,6 @@ fn outer_compute(
     show_progress: bool,
 ) {
     use std::sync::Arc;
-    let count = if show_progress {
-        wordlist.iter().filter(|w| w.is_wide()).count() + 2
-    } else { 0 };
-    let mut progress_bar = BernoulliBar::with_goal(count).timed();
-    // let mut progress_bar = MappingBar::with(
-    //     MappingConfig{
-    //         bar_len: 30,
-    //         style: "[->.]".to_string(),
-    //         interesting_progress_step: 0.
-    //     }
-    // )
     let wordlist_arc = Arc::new(wordlist);
     // "w2m" => worker threads to output thread
     let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(4);
@@ -280,6 +267,7 @@ fn outer_compute(
 
         // "m2w" => main thread to worker threads
         let (m2w_tx, m2w_rx) = crossbeam_channel::bounded::<WordMatrix>(2);
+        let (prog_tx, prog_rx) = crossbeam_channel::bounded::<()>(2);
         let mut worker_handles = Vec::new();
 
         let prefix_map_arc = Arc::new(prefix_map);
@@ -288,6 +276,7 @@ fn outer_compute(
         for _ in 0..num_threads {
             let rxc = m2w_rx.clone();
             let txc = w2m_tx.clone();
+            let progc = prog_tx.clone();
             let my_prefix_map = Arc::clone(&prefix_map_arc);
             let my_wordlist = Arc::clone(&wordlist_arc);
             worker_handles.push(
@@ -309,6 +298,9 @@ fn outer_compute(
                                 txc.send(a).unwrap();
                             }
                         );
+                        if show_progress {
+                            progc.send(()).unwrap();
+                        }
                     }
                 })
             );
@@ -327,19 +319,28 @@ fn outer_compute(
             }
         }
         if DEBUG { dbg!(mi); }
-        if show_progress {
+
+        let mut count = 0;
+        let progress_bar_thread = if show_progress {
+            compute(a, *template, mi, |_| count += 1);
+            let mut progress_bar = BernoulliBar::with_goal(count).timed();
             eprintln!("{}", progress_bar);
-        }
-        let mut last_progress_display = std::time::Instant::now();
+            let mut last_progress_display = std::time::Instant::now();
+            Some(std::thread::spawn(move || {
+                while let Ok(_) = prog_rx.recv() {
+                    progress_bar.add(true);
+                    if last_progress_display.elapsed().as_secs() >= 1 {
+                        last_progress_display = std::time::Instant::now();
+                        eprintln!("{}", progress_bar);
+                    }
+                }
+            }))
+        } else { None };
+
         let f = |ca| {
             if DEBUG { dbg!(ca); }
             m2w_tx.send(ca).unwrap();
             if show_progress {
-                progress_bar.add(true);
-                if last_progress_display.elapsed().as_secs() >= 1 {
-                    last_progress_display = std::time::Instant::now();
-                    eprintln!("{}", progress_bar);
-                }
             }
         };
         if DEBUG { dbg!(); }
@@ -352,17 +353,16 @@ fn outer_compute(
         if DEBUG { dbg!(); }
 
         drop(m2w_tx);
+        drop(prog_tx);
         for h in worker_handles {
             h.join().unwrap();
         }
+        if let Some(t) = progress_bar_thread { t.join().unwrap() }
         if DEBUG { dbg!(); }
     }
     if DEBUG { dbg!(); }
     drop(w2m_tx);
     output_thread.join().unwrap().unwrap();
-    if show_progress {
-        eprintln!("{}", progress_bar);
-    }
     if DEBUG { dbg!(); }
 }
 
@@ -511,8 +511,8 @@ mod test {
 
         expected_results.sort();
 
-        let wordlist:TheSet<EitherWord> = wordlist_str.iter().map(|&s| s.try_into().unwrap()).collect();
-        let must_use:Vec<EitherWord> = must_use_str.iter().map(|&s| s.try_into().unwrap()).collect();
+        let wordlist:TheSet<EitherWord> = wordlist_str.iter().map(|&s| EitherWord::from_str_no_nulls(s).unwrap()).collect();
+        let must_use:Vec<EitherWord> = must_use_str.iter().map(|&s| EitherWord::from_str_with_nulls(s).unwrap()).collect();
         let templates:Vec<WordMatrix> = make_templates(must_use.as_slice(),vec![Default::default()]);
         let results_mutex = Arc::new(Mutex::new(Vec::new()));
         if DEBUG { dbg!(); }

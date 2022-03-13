@@ -40,19 +40,46 @@ impl<const N:usize> Word<N> {
         }
         res
     }
+
+    #[allow(dead_code)]
+    pub fn from_str_with_nulls(s: &str) -> Result<Self, WordConversionError> {
+        Self::from_str(s, true)
+    }
+
+    #[allow(dead_code)]
+    pub fn from_str_no_nulls(s: &str) -> Result<Self, WordConversionError> {
+        Self::from_str(s, false)
+    }
+
+    pub fn from_str(s: &str, nulls_allowed: bool) -> Result<Self, WordConversionError> {
+        let mut res:Self = Default::default();
+        let chars:Vec<_> = s.chars().collect();
+        if chars.len() != N { return Err(WordConversionError::WrongLength) }
+        //Gonna have to straight disagree with clippy here, this is the clearer way to do this
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..N {
+            res.0[i] = match chars[i].try_into() {
+                Err(e) => return Err(WordConversionError::UnencodeableChar(i, e)),
+                Ok(v) if !nulls_allowed && v == NULL_CHAR => return Err(WordConversionError::NullChar),
+                Ok(v) => v,
+            }
+        }
+        Ok(res)
+
+    }
 }
 
 #[cfg(feature = "default-tests")]
 #[test]
 fn prefixes_work() {
-    let pattern:Word<4> = "&&a&".try_into().unwrap();
-    let word:Word<4> = "star".try_into().unwrap();
+    let pattern:Word<4> = Word::from_str_with_nulls("&&a&").unwrap();
+    let word:Word<4> = Word::from_str_with_nulls("star").unwrap();
     let mut test_prefixes = word.prefixes(pattern);
     let mut expected_prefixes:Vec<(Word<4>,EncodedChar)> = vec![
         ("sta&",'r'),
         ("s&a&",'t'),
         ("&&a&",'s')
-    ].into_iter().map(|(w,c)| (w.try_into().unwrap(), c.try_into().unwrap())).collect();
+    ].into_iter().map(|(w,c)| (Word::from_str_with_nulls(w).unwrap(), c.try_into().unwrap())).collect();
     test_prefixes.sort();
     expected_prefixes.sort();
     assert_eq!(test_prefixes, expected_prefixes);
@@ -61,15 +88,15 @@ fn prefixes_work() {
 #[cfg(feature = "default-tests")]
 #[test]
 fn prefixes_work_degenerate() {
-    let pattern:Word<4> = "&&&&".try_into().unwrap();
-    let word:Word<4> = "star".try_into().unwrap();
+    let pattern:Word<4> = Word::from_str_with_nulls("&&&&").unwrap();
+    let word:Word<4> = Word::from_str_with_nulls("star").unwrap();
     let mut test_prefixes = word.prefixes(pattern);
     let mut expected_prefixes:Vec<(Word<4>,EncodedChar)> = vec![
         ("sta&",'r'),
         ("st&&",'a'),
         ("s&&&",'t'),
         ("&&&&",'s'),
-    ].into_iter().map(|(w,c)| (w.try_into().unwrap(), c.try_into().unwrap())).collect();
+    ].into_iter().map(|(w,c)| (Word::from_str_with_nulls(w).unwrap(), c.try_into().unwrap())).collect();
     test_prefixes.sort();
     expected_prefixes.sort();
     assert_eq!(test_prefixes, expected_prefixes);
@@ -78,8 +105,8 @@ fn prefixes_work_degenerate() {
 #[cfg(feature = "default-tests")]
 #[test]
 fn not_match() {
-    let a:Word<5> = "&cb&&".try_into().unwrap();
-    let b:Word<5> = "items".try_into().unwrap();
+    let a:Word<5> = Word::from_str_with_nulls("&cb&&").unwrap();
+    let b:Word<5> = Word::from_str_with_nulls("items").unwrap();
     assert!(!a.is_match(b));
 }
 
@@ -107,26 +134,27 @@ impl<const N:usize> core::ops::DerefMut for Word<N> {
 pub enum WordConversionError {
     WrongLength,
     UnencodeableChar(usize, <EncodedChar as TryFrom<char>>::Error),
+    NullChar,
 }
 
-impl<const N:usize> TryFrom<&str> for Word<N> {
-    type Error = WordConversionError;
+// impl<const N:usize> TryFrom<&str> for Word<N> {
+//     type Error = WordConversionError;
 
-    fn try_from(input: &str) -> Result<Self, Self::Error> {
-        let mut res:Self = Default::default();
-        let chars:Vec<_> = input.chars().collect();
-        if chars.len() != N { return Err(WordConversionError::WrongLength) }
-        //Gonna have to straight disagree with clippy here, this is the clearer way to do this
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..N {
-            res.0[i] = match chars[i].try_into() {
-                Ok(v) => v,
-                Err(e) => return Err(WordConversionError::UnencodeableChar(i, e)),
-            }
-        }
-        Ok(res)
-    }
-}
+//     fn try_from(input: &str) -> Result<Self, Self::Error> {
+//         let mut res:Self = Default::default();
+//         let chars:Vec<_> = input.chars().collect();
+//         if chars.len() != N { return Err(WordConversionError::WrongLength) }
+//         //Gonna have to straight disagree with clippy here, this is the clearer way to do this
+//         #[allow(clippy::needless_range_loop)]
+//         for i in 0..N {
+//             res.0[i] = match chars[i].try_into() {
+//                 Ok(v) => v,
+//                 Err(e) => return Err(WordConversionError::UnencodeableChar(i, e)),
+//             }
+//         }
+//         Ok(res)
+//     }
+// }
 
 pub type TallWord = Word<WORD_SQUARE_HEIGHT>;
 pub type WideWord = Word<WORD_SQUARE_WIDTH>;
@@ -138,28 +166,28 @@ pub enum EitherWord {
     Wide(WideWord),
 }
 
-#[cfg(feature = "square")]
-impl TryFrom<&str> for EitherWord {
-    type Error = WordConversionError;
+// #[cfg(feature = "square")]
+// impl TryFrom<&str> for EitherWord {
+//     type Error = WordConversionError;
 
-    fn try_from(input: &str) -> Result<Self, Self::Error> {
-        Ok(Self::Tall(TallWord::try_from(input)?))
-    }
-}
+//     fn try_from(input: &str) -> Result<Self, Self::Error> {
+//         Ok(Self::Tall(TallWord::try_from(input)?))
+//     }
+// }
 
-#[cfg(not(feature = "square"))]
-impl TryFrom<&str> for EitherWord {
-    type Error = WordConversionError;
+// #[cfg(not(feature = "square"))]
+// impl TryFrom<&str> for EitherWord {
+//     type Error = WordConversionError;
 
-    fn try_from(input: &str) -> Result<Self, Self::Error> {
-        match TallWord::try_from(input) {
-            Ok(v) => return Ok(Self::from(v)),
-            Err(e @ WordConversionError::UnencodeableChar(_,_)) => return Err(e),
-            Err(WordConversionError::WrongLength) => (),
-        }
-        WideWord::try_from(input).map(Self::from)
-    }
-}
+//     fn try_from(input: &str) -> Result<Self, Self::Error> {
+//         match TallWord::try_from(input) {
+//             Ok(v) => return Ok(Self::from(v)),
+//             Err(e @ WordConversionError::UnencodeableChar(_,_)) => return Err(e),
+//             Err(WordConversionError::WrongLength) => (),
+//         }
+//         WideWord::try_from(input).map(Self::from)
+//     }
+// }
 
 impl From<TallWord> for EitherWord {
     fn from(w: TallWord) -> Self {
@@ -174,8 +202,22 @@ impl From<WideWord> for EitherWord {
     }
 }
 
+impl EitherWord {
+    pub fn from_str_with_nulls(s: &str) -> Result<Self, WordConversionError> {
+        Self::from_str(s, true)
+    }
+
+    pub fn from_str_no_nulls(s: &str) -> Result<Self, WordConversionError> {
+        Self::from_str(s, false)
+    }
+}
+
 #[cfg(feature = "square")]
 impl EitherWord {
+    pub fn from_str(s: &str, nulls_allowed: bool) -> Result<Self, WordConversionError> {
+        Ok(Self::Tall(Word::from_str(s, nulls_allowed)?))
+    }
+
     pub fn tall(self) -> Option<TallWord> {
         Some(match self {Self::Tall(v) => v})
     }
@@ -193,6 +235,15 @@ impl EitherWord {
 
 #[cfg(not(feature = "square"))]
 impl EitherWord {
+    pub fn from_str(s: &str, nulls_allowed: bool) -> Result<Self, WordConversionError> {
+        match TallWord::from_str(s, nulls_allowed) {
+            Ok(v) => return Ok(Self::from(v)),
+            Err(WordConversionError::WrongLength) => (),
+            Err(e) => return Err(e),
+        }
+        WideWord::from_str(s, nulls_allowed).map(Self::from)
+    }
+
     pub fn tall(self) -> Option<TallWord> {
         match self {
             Self::Tall(v) => Some(v),
