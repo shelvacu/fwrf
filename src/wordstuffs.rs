@@ -41,6 +41,10 @@ impl<const N:usize> Word<N> {
         res
     }
 
+    pub fn as_slice(&self) -> &[EncodedChar] {
+        self.0.as_slice()
+    }
+
     #[allow(dead_code)]
     pub fn from_str_with_nulls(s: &str) -> Result<Self, WordConversionError> {
         Self::from_str(s, true)
@@ -218,6 +222,10 @@ impl EitherWord {
         Ok(Self::Tall(Word::from_str(s, nulls_allowed)?))
     }
 
+    pub fn as_slice(&self) -> &[EncodedChar] {
+        match self {Self::Tall(v) => v.as_slice()}
+    }
+
     pub fn tall(self) -> Option<TallWord> {
         Some(match self {Self::Tall(v) => v})
     }
@@ -242,6 +250,13 @@ impl EitherWord {
             Err(e) => return Err(e),
         }
         WideWord::from_str(s, nulls_allowed).map(Self::from)
+    }
+
+    pub fn as_slice(&self) -> &[EncodedChar] {
+        match self {
+            Self::Tall(v) => v.as_slice(),
+            Self::Wide(v) => v.as_slice(),
+        }
     }
 
     pub fn tall(self) -> Option<TallWord> {

@@ -81,6 +81,11 @@ fn main() -> io::Result<()> {
             .short("f")
             .help("Shows output word rectangles across multiple lines (easier to see column words that way) and unbuffered. May be a significant slowdown if many results are produced.")
         )
+        .arg(Arg::with_name("filter-aa")
+            .long("filter-aa")
+            .short("a")
+            .help("Filters words of all the same letter (like 'aaaaaa')")
+        )
         .get_matches()
     ;
     
@@ -90,6 +95,7 @@ fn main() -> io::Result<()> {
     let fancy = args.is_present("fancy-output");
     let show_progress = args.is_present("show-progress");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
+    let filter_aa = args.is_present("filter-aa");
 
     let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
 
@@ -98,7 +104,16 @@ fn main() -> io::Result<()> {
     for maybe_line in f.lines() {
         let line = maybe_line.unwrap();
         match EitherWord::from_str_no_nulls(line.as_str()) {
-            Ok(w) => { words.insert(w); },
+            Ok(w) => {
+                let s = w.as_slice();
+                let mut all_same = true;
+                for i in 1..s.len() {
+                    all_same = all_same && s[0] == s[i];
+                }
+                if !filter_aa || !all_same {
+                    words.insert(w);
+                }
+            },
             Err(WordConversionError::WrongLength) => (),
             Err(e) => {
                 if !ignore_unencodeable {
