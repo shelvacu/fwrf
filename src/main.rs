@@ -1,9 +1,18 @@
 #![feature(type_ascription, array_zip, min_specialization)]
 
+
+macro_rules! highly_unsafe_garuntee {
+    ($garuntee:expr) => {
+        #[cfg(feature = "more-unchecked")]
+        unsafe { if !$garuntee { std::hint::unreachable_unchecked() } }
+    }
+}
+
 mod config;
 mod echar;
 mod charset;
 mod wordstuffs;
+mod serial_prefix_map;
 
 use std::io::{self, BufReader};
 use std::io::prelude::*;
@@ -19,9 +28,11 @@ use clap::{
     Arg
 };
 
+use config::*;
 use wordstuffs::*;
 use charset::*;
 use echar::*;
+use serial_prefix_map::*;
 
 #[cfg(feature = "do-debug")]
 const DEBUG:bool = true;
@@ -273,11 +284,17 @@ fn outer_compute(
     show_progress: bool,
 ) {
     use std::sync::Arc;
+    #[cfg(feature = "serial")]
+    let prefix_map = serial_prefix_map::SerialPrefixMaps::new(&make_prefix_map(WordMatrix::default(), wordlist.iter().copied()).2);
+    #[cfg(feature = "serial")]
+    let prefix_map_arc = Arc::new(prefix_map);
+
     let wordlist_arc = Arc::new(wordlist);
     // "w2m" => worker threads to output thread
     let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(4);
     let output_thread = std::thread::spawn(move || output_func(w2m_rx));
     for template in templates {
+        #[cfg(not(feature = "serial"))]
         let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist_arc.iter().copied());
 
         // "m2w" => main thread to worker threads
@@ -285,6 +302,7 @@ fn outer_compute(
         let (prog_tx, prog_rx) = crossbeam_channel::bounded::<()>(2);
         let mut worker_handles = Vec::new();
 
+        #[cfg(not(feature = "serial"))]
         let prefix_map_arc = Arc::new(prefix_map);
 
         
@@ -359,12 +377,16 @@ fn outer_compute(
             }
         };
         if DEBUG { dbg!(); }
-        compute(
-            a,
-            *template,
-            mi,
-            f,
-        );
+        if worker_handles.len() == 1 && !show_progress{
+            m2w_tx.send(GenericMatrix([NULL_CHAR; WORD_SQUARE_SIZE])).unwrap();
+        } else {
+            compute(
+                a,
+                *template,
+                mi,
+                f,
+            );
+        }
         if DEBUG { dbg!(); }
 
         drop(m2w_tx);
@@ -434,8 +456,12 @@ where
     (row_counts, col_counts, res)
 }
 
-fn compute<F: FnMut(WordMatrix)>(
+#[inline(never)]
+fn compute<'a, F: FnMut(WordMatrix)>(
+    #[cfg(not(feature = "serial"))]
     prefix_map: &WordPrefixMap,
+    #[cfg(feature = "serial")]
+    prefix_map: &'a SerialPrefixMaps,
     orig_matrix: WordMatrix,
     target_idx: MatrixIndex,
     mut on_result: F,
@@ -443,26 +469,53 @@ fn compute<F: FnMut(WordMatrix)>(
     let mut at_idx = MatrixIndex::ZERO;
     let mut charset_array:GenericMatrix<CharSet> = Default::default();
     let mut is_nullish:GenericMatrix<bool> = GenericMatrix([true; config::WORD_SQUARE_SIZE]);
+    #[cfg(feature = "serial")]
+    let traversals_rows:GenericMatrix<Evil<'a>> = GenericMatrix([prefix_map.rows().top(); config::WORD_SQUARE_SIZE]);
+    #[cfg(feature = "serial")]
+    let traversals_cols:GenericMatrix<Evil<'a>> = GenericMatrix([prefix_map.cols().top(); config::WORD_SQUARE_SIZE]);
+    #[cfg(feature = "serial")]
+    let mut traversals = (traversals_rows, traversals_cols);
     let mut matrix = orig_matrix;
 
     for row in RowIndex::all_values() {
         for col in ColIndex::all_values() {
             let mi = MatrixIndex{row,col};
             if orig_matrix[mi] != NULL_CHAR {
+                highly_unsafe_garuntee!(orig_matrix[mi].inner() < CHAR_SET_SIZE);
                 charset_array[mi].set(orig_matrix[mi]);
             }
         }
     }
 
     loop {
-        // if DEBUG {
-        //     dbg!(at_idx,matrix);
-        // }
-        if is_nullish[at_idx] && orig_matrix[at_idx] == NULL_CHAR {
+        if DEBUG {
+            dbg!(at_idx,matrix[at_idx]);
+        }
+        if is_nullish[at_idx] {
+            #[cfg(feature = "serial")]
             let (row_set, col_set) = each_dimension!(dim, {
-                dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).copied().unwrap_or_default()
+                if DEBUG { dbg!(dim::DIMENSION_ID); }
+                let traversal = dim::index_tuple_mut(&mut traversals);
+                let cur_evil = dim::back(at_idx).map(|mi| {
+                    #[cfg(feature = "unchecked")]
+                    let c = unsafe { CharSetRanged::new_unchecked(matrix[mi].inner()) };
+                    #[cfg(not(feature = "unchecked"))]
+                    let c = matrix[mi].inner().try_into().unwrap();
+                    unsafe {
+                        traversal[mi].get_unchecked(c)
+                    }
+                }).unwrap_or(dim::prefix_map(&prefix_map).top());
+                traversal[at_idx] = cur_evil;
+                if DEBUG { dbg!(cur_evil.line()); }
+                cur_evil.charset()
             });
-            charset_array[at_idx] = row_set.and(col_set);
+            if orig_matrix[at_idx] == NULL_CHAR {
+                #[cfg(not(feature = "serial"))]
+                let (row_set, col_set) = each_dimension!(dim, {
+                    dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).copied().unwrap_or_default()
+                });
+                charset_array[at_idx] = row_set.and(col_set);
+            }
         }
 
         if orig_matrix[at_idx] == NULL_CHAR || !is_nullish[at_idx] {
@@ -483,6 +536,7 @@ fn compute<F: FnMut(WordMatrix)>(
         }
 
         is_nullish[at_idx] = false;
+        highly_unsafe_garuntee!(matrix[at_idx].inner() < CHAR_SET_SIZE);
         if charset_array[at_idx].has(matrix[at_idx]) {
             let next = at_idx.inc();
             if next == target_idx.inc() {
@@ -491,7 +545,8 @@ fn compute<F: FnMut(WordMatrix)>(
             } else if let Some(i) = next {
                 at_idx = i;
             } else {
-                unreachable!();
+                //unreachable!();
+                unsafe { std::hint::unreachable_unchecked() };
             }
         }
     }

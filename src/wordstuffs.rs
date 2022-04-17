@@ -7,6 +7,7 @@ use fnv::FnvHashMap;
 
 use crate::config::*;
 use crate::echar::*;
+use crate::serial_prefix_map::*;
 use crate::charset::CharSet;
 
 #[derive(PartialEq,Eq,PartialOrd,Ord,Copy,Clone,Hash)]
@@ -488,7 +489,13 @@ pub mod dim_row {
         index_matrix(matrix, get_my_index(point))
     }
 
+    #[cfg(not(feature = "serial"))]
     pub fn prefix_map(map: &WordPrefixMap) -> &TheMap<Word,CharSet> {
+        map.rows()
+    }
+
+    #[cfg(feature = "serial")]
+    pub fn prefix_map(map: &SerialPrefixMaps) -> &SingleDimSerialPrefixMap {
         map.rows()
     }
 
@@ -506,6 +513,15 @@ pub mod dim_row {
 
     pub fn get_from_either(e: EitherWord) -> Option<Word> {
         e.wide()
+    }
+
+    pub fn back(mi: MatrixIndex) -> Option<MatrixIndex> {
+        if let Some(r) = mi.row.checked_sub(1) {
+            Some(MatrixIndex{
+                row: r,
+                col: mi.col,
+            })
+        } else { None }
     }
 }
 
@@ -540,7 +556,13 @@ pub mod dim_col {
         index_matrix(matrix, get_my_index(point))
     }
 
+    #[cfg(not(feature = "serial"))]
     pub fn prefix_map(map: &WordPrefixMap) -> &TheMap<Word,CharSet> {
+        map.cols()
+    }
+
+    #[cfg(feature = "serial")]
+    pub fn prefix_map(map: &SerialPrefixMaps) -> &SingleDimSerialPrefixMap {
         map.cols()
     }
 
@@ -565,6 +587,15 @@ pub mod dim_col {
     pub fn get_from_either(e: EitherWord) -> Option<Word> {
         e.tall()
     }
+
+    pub fn back(mi: MatrixIndex) -> Option<MatrixIndex> {
+        if let Some(c) = mi.col.checked_sub(1) {
+            Some(MatrixIndex{
+                row: mi.row,
+                col: c,
+            })
+        } else { None }
+    }
 }
 
 // This little hack is extremely useful for IDE completions when using the each_dimension macros
@@ -573,9 +604,9 @@ pub mod dim_col {
 pub use dim_row as dim;
 
 #[cfg(not(feature = "btreemap"))]
-type TheMap<K, V> = FnvHashMap<K, V>;
+pub type TheMap<K, V> = FnvHashMap<K, V>;
 #[cfg(feature = "btreemap")]
-type TheMap<K, V> = std::collections::BTreeMap<K, V>;
+pub type TheMap<K, V> = std::collections::BTreeMap<K, V>;
 
 pub type TheSet<V> = fnv::FnvHashSet<V>;
 

@@ -33,7 +33,9 @@ panic = 'abort'
 [features]
 do-debug = []
 unchecked = ["deranged/unsafe-range-assert"]
+more-unchecked = []
 btreemap = []
+serial = []
 
 charset-english-small = ["charset-size-32"]
 charset-english-extended = ["charset-size-64"]
@@ -74,4 +76,4 @@ height-15 = []
 
 default-tests = []
 
-default = ["width-5", "height-5", "charset-english-small", "square", "default-tests"]
+default = ["width-5", "height-5", "charset-english-small", "square", "default-tests", "serial"]
