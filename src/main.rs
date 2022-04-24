@@ -120,8 +120,11 @@ fn main() -> io::Result<()> {
 
     let mut words:TheSet<EitherWord> = Default::default();
 
+    let mut lineno = 1;
     for maybe_line in f.lines() {
+        if maybe_line.is_err() { eprintln!("Error on line {}", lineno); }
         let line = maybe_line.unwrap();
+        lineno += 1;
         match EitherWord::from_str_no_nulls(line.as_str()) {
             Ok(w) => {
                 let s = w.as_slice();

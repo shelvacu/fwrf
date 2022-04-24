@@ -36,6 +36,7 @@ unchecked = ["deranged/unsafe-range-assert"]
 more-unchecked = []
 btreemap = []
 serial = []
+weave = []
 
 charset-english-small = ["charset-size-32"]
 charset-english-extended = ["charset-size-64"]

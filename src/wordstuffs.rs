@@ -375,6 +375,7 @@ impl MatrixIndex {
         RowIndex::all_values().map(move |row| MatrixIndex{row, col})
     }
 
+    #[cfg(not(feature = "weave"))]
     pub fn inc(self) -> Option<Self> {
         if let Some(new_col) = self.col.checked_add(1) {
             return Some(Self{
@@ -391,6 +392,7 @@ impl MatrixIndex {
         None
     }
     
+    #[cfg(not(feature = "weave"))]
     pub fn dec(self) -> Option<Self> {
         if let Some(new_col) = self.col.checked_sub(1) {
             return Some(Self{
@@ -406,6 +408,113 @@ impl MatrixIndex {
         }
         None
     }
+
+    #[cfg(feature = "weave")]
+    pub fn inc(self) -> Option<Self> {
+        if self.col >= self.row {
+            if let Some(new_col) = self.col.checked_add(1) {
+                return Some(Self{
+                    row: self.row,
+                    col: new_col,
+                })
+            }
+            if let Some(new_row) = self.row.checked_add(1) {
+                return Some(Self{
+                    row: new_row,
+                    col: (self.row.into():usize).try_into().unwrap(),
+                })
+            }
+            None
+        } else {
+            if let Some(new_row) = self.row.checked_add(1) {
+                return Some(Self{
+                    row: new_row,
+                    col: self.col,
+                })
+            }
+            if let Some(new_col) = self.col.checked_add(1) {
+                return Some(Self{
+                    row: (new_col.into():usize).try_into().unwrap(),
+                    col: new_col,
+                })
+            }
+            None
+        }
+    }
+
+    #[cfg(feature = "weave")]
+    pub fn dec(self) -> Option<Self> {
+        if self.col >= self.row {
+            if self.col == self.row {
+                if let Some(new_col) = self.col.checked_sub(1) {
+                    Some(Self{
+                        row: RowIndex::MAX,
+                        col: new_col,
+                    })
+                } else {
+                    None
+                }
+            } else if let Some(new_col) = self.col.checked_sub(1) {
+                Some(Self{
+                    row: self.row,
+                    col: new_col,
+                })
+            } else { unreachable!() }
+        } else {
+            if Some(self.row.into():usize) == self.col.checked_add(1).map(|a| a.into():usize) {
+                if let Some(new_row) = self.row.checked_sub(1) {
+                    Some(Self{
+                        row: new_row,
+                        col: ColIndex::MAX,
+                    })
+                } else { unreachable!() }
+            } else if let Some(new_row) = self.row.checked_sub(1) {
+                return Some(Self{
+                    row: new_row,
+                    col: self.col,
+                })
+            } else { unreachable!() }
+        }
+    }
+}
+
+#[test]
+fn index_inc_and_dec_match() {
+    let mut idx = MatrixIndex::ZERO;
+    let mut idxs_forward = vec![];
+    loop {
+        idxs_forward.push(idx);
+        if let Some(new_idx) = idx.inc() {
+            idx = new_idx;
+        } else { break; }
+    }
+    let mut idxs_backward = vec![];
+    loop {
+        // dbg!(idx);
+        idxs_backward.push(idx);
+        if let Some(new_idx) = idx.dec() {
+            idx = new_idx;
+        } else { break; }
+    }
+    idxs_backward.reverse();
+    assert_eq!(idxs_forward, idxs_backward);
+}
+
+#[test]
+fn index_inc_uniquely_covers() {
+    let mut idx = MatrixIndex::ZERO;
+    let mut idxs_forward = vec![];
+    loop {
+        // dbg!(idx);
+        idxs_forward.push(idx);
+        if let Some(new_idx) = idx.inc() {
+            idx = new_idx;
+        } else { break; }
+    }
+    assert_eq!(idxs_forward.len(), WORD_SQUARE_SIZE);
+    idxs_forward.sort();
+    idxs_forward.dedup();
+    assert_eq!(idxs_forward.len(), WORD_SQUARE_SIZE);
 }
 
 impl Ord for MatrixIndex {
