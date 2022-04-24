@@ -71,7 +71,15 @@ const CHAR_SET_SIZE_MINUS_1:usize = CHAR_SET_SIZE - 1;
 pub type CharSetRanged = deranged::Usize<0,CHAR_SET_SIZE_MINUS_1>;
 
 #[cfg(feature = "square")]
-static_assertions::const_assert_eq!(WORD_SQUARE_HEIGHT, WORD_SQUARE_WIDTH);
+static_assertions::const_assert_eq!(
+    // Compile error? You have the feature "square" enabled when you shouldn't
+    WORD_SQUARE_HEIGHT,
+    WORD_SQUARE_WIDTH,
+);
 
 #[cfg(not(feature = "square"))]
-static_assertions::const_assert_ne!(WORD_SQUARE_HEIGHT, WORD_SQUARE_WIDTH);
+static_assertions::const_assert_ne!(
+    // Compile error? You have the feature flag "square" missing
+    WORD_SQUARE_HEIGHT,
+    WORD_SQUARE_WIDTH,
+);

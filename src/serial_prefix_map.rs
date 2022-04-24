@@ -145,19 +145,19 @@ impl<'a> Evil<'a> {
         }
     }
 
-    pub fn get(self, i: CharSetRanged) -> Option<Evil<'a>> {
-        let ptr = self.ptr.as_ptr();
-        let line:Line = unsafe { *ptr };
-        let offset = line[i];
-        if offset == 0 || offset == Offset::MAX {
-            None
-        } else {
-            Some(Self{
-                ptr: unsafe { NonNull::new_unchecked(ptr.offset(offset as isize)) },
-                life: PhantomData,
-            })
-        }
-    }
+    // pub fn get(self, i: CharSetRanged) -> Option<Evil<'a>> {
+    //     let ptr = self.ptr.as_ptr();
+    //     let line:Line = unsafe { *ptr };
+    //     let offset = line[i];
+    //     if offset == 0 || offset == Offset::MAX {
+    //         None
+    //     } else {
+    //         Some(Self{
+    //             ptr: unsafe { NonNull::new_unchecked(ptr.offset(offset as isize)) },
+    //             life: PhantomData,
+    //         })
+    //     }
+    // }
 
     pub fn line(self) -> Line {
         unsafe { *self.ptr.as_ptr() }

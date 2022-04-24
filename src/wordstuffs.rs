@@ -7,6 +7,7 @@ use fnv::FnvHashMap;
 
 use crate::config::*;
 use crate::echar::*;
+#[cfg(feature = "serial")]
 use crate::serial_prefix_map::*;
 use crate::charset::CharSet;
 
@@ -481,10 +482,12 @@ pub mod dim_row {
         }
     }
 
+    #[cfg(not(feature = "serial"))]
     pub fn get_my_index(mi: MatrixIndex) -> Index {
         mi.row
     }
 
+    #[cfg(not(feature = "serial"))]
     pub fn get_word_intersecting_point(matrix: WordMatrix, point: MatrixIndex) -> Word {
         index_matrix(matrix, get_my_index(point))
     }
@@ -515,6 +518,7 @@ pub mod dim_row {
         e.wide()
     }
 
+    #[cfg(feature = "serial")]
     pub fn back(mi: MatrixIndex) -> Option<MatrixIndex> {
         if let Some(r) = mi.row.checked_sub(1) {
             Some(MatrixIndex{
@@ -548,10 +552,12 @@ pub mod dim_col {
         }
     }
 
+    #[cfg(not(feature = "serial"))]
     pub fn get_my_index(mi: MatrixIndex) -> Index {
         mi.col
     }
 
+    #[cfg(not(feature = "serial"))]
     pub fn get_word_intersecting_point(matrix: WordMatrix, point: MatrixIndex) -> Word {
         index_matrix(matrix, get_my_index(point))
     }
@@ -588,6 +594,7 @@ pub mod dim_col {
         e.tall()
     }
 
+    #[cfg(feature = "serial")]
     pub fn back(mi: MatrixIndex) -> Option<MatrixIndex> {
         if let Some(c) = mi.col.checked_sub(1) {
             Some(MatrixIndex{
@@ -622,6 +629,7 @@ impl WordPrefixMap {
         &self.inner_rows
     }
 
+    #[allow(dead_code)]
     pub fn cols(&self) -> &TheMap<TallWord,CharSet> {
         #[cfg(not(feature = "square"))]
         return &self.inner_cols;

@@ -12,6 +12,7 @@ mod config;
 mod echar;
 mod charset;
 mod wordstuffs;
+#[cfg(feature = "serial")]
 mod serial_prefix_map;
 
 use std::io::{self, BufReader};
@@ -32,6 +33,7 @@ use config::*;
 use wordstuffs::*;
 use charset::*;
 use echar::*;
+#[cfg(feature = "serial")]
 use serial_prefix_map::*;
 
 #[cfg(feature = "do-debug")]
@@ -97,6 +99,11 @@ fn main() -> io::Result<()> {
             .short("a")
             .help("Filters words of all the same letter (like 'aaaaaa')")
         )
+        .arg(Arg::with_name("count")
+            .long("count")
+            .short("c")
+            .help("Does not output any word rects, instead outputs a count of how many were found")
+        )
         .get_matches()
     ;
     
@@ -107,6 +114,7 @@ fn main() -> io::Result<()> {
     let show_progress = args.is_present("show-progress");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
     let filter_aa = args.is_present("filter-aa");
+    let count_rects = args.is_present("count");
 
     let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
 
@@ -238,17 +246,21 @@ fn main() -> io::Result<()> {
     let mut time = devtimer::DevTime::new_simple();
     time.start();
 
-    outer_compute(
+    let count = outer_compute(
         words,
         templates.as_slice(),
         num_threads as usize,
         compute_func,
         show_progress,
+        count_rects,
     );
 
     time.stop();
     if loud {
         eprintln!("Took {} secs", (time.time_in_micros().unwrap() as u64 as f64) / 1_000_000.0)
+    }
+    if count_rects {
+        println!("{} rects found", count);
     }
 
     Ok(())
@@ -282,7 +294,8 @@ fn outer_compute(
     num_threads: usize,
     output_func: impl 'static + Send + FnOnce(std::sync::mpsc::Receiver<WordMatrix>) -> Result<(), std::io::Error>,
     show_progress: bool,
-) {
+    count_rects: bool,
+) -> u64 {
     use std::sync::Arc;
     #[cfg(feature = "serial")]
     let prefix_map = serial_prefix_map::SerialPrefixMaps::new(&make_prefix_map(WordMatrix::default(), wordlist.iter().copied()).2);
@@ -290,9 +303,17 @@ fn outer_compute(
     let prefix_map_arc = Arc::new(prefix_map);
 
     let wordlist_arc = Arc::new(wordlist);
+    let (count_tx, count_rx) = crossbeam_channel::bounded::<u64>(2);
     // "w2m" => worker threads to output thread
     let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(4);
     let output_thread = std::thread::spawn(move || output_func(w2m_rx));
+    let count_thread = std::thread::spawn(move || {
+        let mut count = 0;
+        while let Ok(msg) = count_rx.recv() {
+            count += msg;
+        }
+        count
+    });
     for template in templates {
         #[cfg(not(feature = "serial"))]
         let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist_arc.iter().copied());
@@ -309,11 +330,13 @@ fn outer_compute(
         for _ in 0..num_threads {
             let rxc = m2w_rx.clone();
             let txc = w2m_tx.clone();
+            let countc = count_tx.clone();
             let progc = prog_tx.clone();
             let my_prefix_map = Arc::clone(&prefix_map_arc);
             let my_wordlist = Arc::clone(&wordlist_arc);
             worker_handles.push(
                 std::thread::spawn( move || {
+                    let mut thread_count = 0;
                     while let Ok(msg) = rxc.recv() {
                         compute(
                             &my_prefix_map,
@@ -328,12 +351,19 @@ fn outer_compute(
                                         }
                                     }
                                 });
-                                txc.send(a).unwrap();
+                                if count_rects {
+                                    thread_count += 1;
+                                } else {
+                                    txc.send(a).unwrap();
+                                }
                             }
                         );
                         if show_progress {
                             progc.send(()).unwrap();
                         }
+                    }
+                    if count_rects {
+                        countc.send(thread_count).unwrap();
                     }
                 })
             );
@@ -377,6 +407,7 @@ fn outer_compute(
             }
         };
         if DEBUG { dbg!(); }
+        //If there's only one worker thread, and we don't need to show progress, then there's no point "splitting up" the work
         if worker_handles.len() == 1 && !show_progress{
             m2w_tx.send(GenericMatrix([NULL_CHAR; WORD_SQUARE_SIZE])).unwrap();
         } else {
@@ -397,10 +428,13 @@ fn outer_compute(
         if let Some(t) = progress_bar_thread { t.join().unwrap() }
         if DEBUG { dbg!(); }
     }
+    drop(count_tx);
+    let full_count:u64 = count_thread.join().unwrap();
     if DEBUG { dbg!(); }
     drop(w2m_tx);
     output_thread.join().unwrap().unwrap();
     if DEBUG { dbg!(); }
+    full_count
 }
 
 // It is assumed that this function does *not* need to be fast, and should be written in whatever way is reasonably fast and most correct and elegant.
@@ -456,7 +490,6 @@ where
     (row_counts, col_counts, res)
 }
 
-#[inline(never)]
 fn compute<'a, F: FnMut(WordMatrix)>(
     #[cfg(not(feature = "serial"))]
     prefix_map: &WordPrefixMap,
@@ -601,6 +634,7 @@ mod test {
                 if DEBUG { dbg!(); }
                 Ok(())
             },
+            false,
             false,
         );
         if DEBUG { dbg!(); }
