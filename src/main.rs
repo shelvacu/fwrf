@@ -4,7 +4,7 @@
 macro_rules! highly_unsafe_garuntee {
     ($garuntee:expr) => {
         #[cfg(feature = "more-unchecked")]
-        unsafe { if !$garuntee { std::hint::unreachable_unchecked() } }
+        if !$garuntee { unsafe { std::hint::unreachable_unchecked() } }
     }
 }
 
@@ -61,7 +61,7 @@ fn main() -> io::Result<()> {
         )
         .arg(Arg::with_name("wordlist")
             .required(true)
-            .help("the wordlist file path, a plain-text UTF-8 file with each word separated by a newline")
+            .help("the wordlist file path, a plain-text UTF-8 file with each word separated by a newline. Use - for stdin")
         )
         .arg(Arg::with_name("ignore-empty-wordlist")
             .long("ignore-empty-wordlist")
@@ -104,6 +104,11 @@ fn main() -> io::Result<()> {
             .short("c")
             .help("Does not output any word rects, instead outputs a count of how many were found")
         )
+        .arg(Arg::with_name("templates")
+            .long("templates")
+            .takes_value(true)
+            .help(r#"A "pattern" the square must conform to. Much faster than filtering for a pattern after with grep or whatever. Compatible with --must-include. Use & for null/empty, and separate each template with ! and each line within with |."#)
+        )
         .get_matches()
     ;
     
@@ -115,8 +120,14 @@ fn main() -> io::Result<()> {
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
     let filter_aa = args.is_present("filter-aa");
     let count_rects = args.is_present("count");
+    let arg_templates = args.value_of("templates");
 
-    let f = BufReader::new(File::open(args.value_of("wordlist").unwrap())?);
+    let filename = args.value_of("wordlist").unwrap();
+    let f:BufReader<Box<dyn Read>> = if filename == "-" {
+        BufReader::new(Box::new(std::io::stdin()))
+    } else {
+        BufReader::new(Box::new(File::open(filename)?))
+    };
 
     let mut words:TheSet<EitherWord> = Default::default();
 
@@ -184,7 +195,34 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
-    let templates:Vec<WordMatrix> = make_templates(must_include.as_slice(),vec![Default::default()]);
+    let templates = if let Some(arg_templates) = arg_templates {
+        let mut res = vec![];
+        let thing:Vec<Vec<&str>> = arg_templates.split('!').map(|s| s.split('|').collect()).collect();
+        for (i, rect) in thing.into_iter().enumerate() {
+            if rect.len() != WORD_SQUARE_HEIGHT {
+                eprintln!("Error: Incorrect number of words in template {}", i);
+                std::process::exit(1);
+            }
+            let mut m = WordMatrix::default();
+            for (j, word) in rect.into_iter().enumerate() {
+                if word.len() != WORD_SQUARE_WIDTH {
+                    eprintln!("Error: Incorrect number of letters in word {} in template {}", j, i);
+                    std::process::exit(1);
+                }
+                let row:RowIndex = j.try_into().unwrap();
+                for (k, c) in word.chars().enumerate() {
+                    let col:ColIndex = k.try_into().unwrap();
+                    let e:EncodedChar = c.try_into().expect("Not a valid char in template");
+                    m[MatrixIndex{row, col}] = e;
+                }
+            }
+
+            res.push(m);
+        }
+        res
+    } else { vec![Default::default()] };
+
+    let templates:Vec<WordMatrix> = make_templates(must_include.as_slice(), templates);
 
     if DEBUG {
         dbg!(&templates);
@@ -318,7 +356,7 @@ fn outer_compute(
         count
     });
     for template in templates {
-        #[cfg(not(feature = "serial"))]
+        #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
         let (_row_counts, _col_counts, prefix_map) = make_prefix_map(*template, wordlist_arc.iter().copied());
 
         // "m2w" => main thread to worker threads
@@ -326,7 +364,7 @@ fn outer_compute(
         let (prog_tx, prog_rx) = crossbeam_channel::bounded::<()>(2);
         let mut worker_handles = Vec::new();
 
-        #[cfg(not(feature = "serial"))]
+        #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
         let prefix_map_arc = Arc::new(prefix_map);
 
         
@@ -376,7 +414,7 @@ fn outer_compute(
         let mut mi = MatrixIndex::ZERO;
         {
             let mut nulls_so_far = 0;
-            while nulls_so_far < config::WORD_SQUARE_WIDTH-1 {
+            while nulls_so_far < config::WORD_SQUARE_WIDTH-1 + 3 {
                 if template[mi] == NULL_CHAR { nulls_so_far += 1 }
                 mi = match mi.inc() {
                     Some(v) => v,
@@ -494,7 +532,7 @@ where
 }
 
 fn compute<'a, F: FnMut(WordMatrix)>(
-    #[cfg(not(feature = "serial"))]
+    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
     prefix_map: &WordPrefixMap,
     #[cfg(feature = "serial")]
     prefix_map: &'a SerialPrefixMaps,
@@ -546,7 +584,7 @@ fn compute<'a, F: FnMut(WordMatrix)>(
                 cur_evil.charset()
             });
             if orig_matrix[at_idx] == NULL_CHAR {
-                #[cfg(not(feature = "serial"))]
+                #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
                 let (row_set, col_set) = each_dimension!(dim, {
                     dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).copied().unwrap_or_default()
                 });
@@ -581,7 +619,9 @@ fn compute<'a, F: FnMut(WordMatrix)>(
             } else if let Some(i) = next {
                 at_idx = i;
             } else {
-                //unreachable!();
+                #[cfg(not(feature = "unchecked"))]
+                unreachable!();
+                #[cfg(feature = "unchecked")]
                 unsafe { std::hint::unreachable_unchecked() };
             }
         }

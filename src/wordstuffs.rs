@@ -591,17 +591,17 @@ pub mod dim_row {
         }
     }
 
-    #[cfg(not(feature = "serial"))]
+    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
     pub fn get_my_index(mi: MatrixIndex) -> Index {
         mi.row
     }
 
-    #[cfg(not(feature = "serial"))]
+    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
     pub fn get_word_intersecting_point(matrix: WordMatrix, point: MatrixIndex) -> Word {
         index_matrix(matrix, get_my_index(point))
     }
 
-    #[cfg(not(feature = "serial"))]
+    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
     pub fn prefix_map(map: &WordPrefixMap) -> &TheMap<Word,CharSet> {
         map.rows()
     }
@@ -661,17 +661,17 @@ pub mod dim_col {
         }
     }
 
-    #[cfg(not(feature = "serial"))]
+    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
     pub fn get_my_index(mi: MatrixIndex) -> Index {
         mi.col
     }
 
-    #[cfg(not(feature = "serial"))]
+    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
     pub fn get_word_intersecting_point(matrix: WordMatrix, point: MatrixIndex) -> Word {
         index_matrix(matrix, get_my_index(point))
     }
 
-    #[cfg(not(feature = "serial"))]
+    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
     pub fn prefix_map(map: &WordPrefixMap) -> &TheMap<Word,CharSet> {
         map.cols()
     }

@@ -83,3 +83,8 @@ static_assertions::const_assert_ne!(
     WORD_SQUARE_HEIGHT,
     WORD_SQUARE_WIDTH,
 );
+
+//// Waiting on https://github.com/nvzqz/static-assertions-rs/pull/48
+// static_assertions::assert_one_feature!("fnvmap", "btreemap", "serial");
+// static_assertions::assert_one_feature!("row-by-row", "weave");
+// static_assertions::assert_one_feature!("charset-english-small", "charset-english-extended");

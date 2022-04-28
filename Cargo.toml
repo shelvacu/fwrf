@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 static_assertions = "1.1.0"
+#static_assertions = { path = "../static-assertions-rs" }
 fnv = "1.0.7"
 clap = "2.33.3"
 crossbeam-channel = "0.5"
@@ -34,8 +35,11 @@ panic = 'abort'
 do-debug = []
 unchecked = ["deranged/unsafe-range-assert"]
 more-unchecked = []
+fnvmap = []
 btreemap = []
 serial = []
+
+row-by-row = []
 weave = []
 
 charset-english-small = ["charset-size-32"]
@@ -77,4 +81,5 @@ height-15 = []
 
 default-tests = []
 
-default = ["width-5", "height-5", "charset-english-small", "square", "default-tests", "serial"]
+default-unsized = ["charset-english-small", "row-by-row", "fnvmap"]
+default = ["width-5", "height-5", "square", "default-unsized"]
