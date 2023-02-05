@@ -14,6 +14,7 @@ mod charset;
 mod wordstuffs;
 #[cfg(feature = "serial")]
 mod serial_prefix_map;
+mod binary_searched_array_map;
 
 use std::io::{self, BufReader};
 use std::io::prelude::*;
@@ -107,7 +108,7 @@ fn main() -> io::Result<()> {
         .arg(Arg::with_name("templates")
             .long("templates")
             .takes_value(true)
-            .help(r#"A "pattern" the square must conform to. Much faster than filtering for a pattern after with grep or whatever. Compatible with --must-include. Use & for null/empty, and separate each template with ! and each line within with |."#)
+            .help(r#"A "pattern" the square must conform to. Much faster than filtering for a pattern after with grep or whatever. Compatible with --must-include. Use & to match any character, and separate each template with ! and each line within with |."#)
         )
         .get_matches()
     ;
@@ -255,7 +256,7 @@ fn main() -> io::Result<()> {
             while let Ok(wm) = w2m_rx.recv() {
                 for row in RowIndex::all_values() {
                     for col in ColIndex::all_values() {
-                        minibuffer.push(wm[MatrixIndex{row,col}].into():char);
+                        minibuffer.push(wm[MatrixIndex{row,col}].into());
                     }
                     minibuffer.push('\n');
                 }
@@ -269,7 +270,7 @@ fn main() -> io::Result<()> {
             while let Ok(wm) = w2m_rx.recv() {
                 for row in RowIndex::all_values() {
                     for col in ColIndex::all_values() {
-                        minibuffer.push(wm[MatrixIndex{row,col}].into():char);
+                        minibuffer.push(wm[MatrixIndex{row,col}].into());
                     }
                     if row < RowIndex::MAX {
                         minibuffer.push('|');
