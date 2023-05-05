@@ -1,4 +1,4 @@
-#![feature(type_ascription, array_zip, min_specialization)]
+#![feature(type_ascription, array_zip, min_specialization, portable_simd, iter_array_chunks)]
 
 
 macro_rules! highly_unsafe_garuntee {
@@ -15,6 +15,7 @@ mod wordstuffs;
 #[cfg(feature = "serial")]
 mod serial_prefix_map;
 mod binary_searched_array_map;
+mod bsam2;
 
 use std::io::{self, BufReader};
 use std::io::prelude::*;
