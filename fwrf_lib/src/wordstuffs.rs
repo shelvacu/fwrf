@@ -14,9 +14,39 @@ use crate::charset::CharSet;
 #[derive(PartialEq,Eq,PartialOrd,Ord,Copy,Clone,Hash)]
 pub struct Word<const N:usize>(pub [EncodedChar; N]);
 
+#[cfg(feature = "perfectmap")]
+impl<const N:usize> phf::PhfHash for Word<N> {
+    #[inline]
+    fn phf_hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        for ec in self.as_slice() {
+            ec.phf_hash(state);
+        }
+    }
+}
+
+
+#[cfg(feature = "perfectmap")]
+impl<const N:usize> phf_shared::FmtConst for Word<N> {
+    fn fmt_const(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "::fwrf_lib::wordstuffs::Word::<{}>([", N)?;
+        for ec in self.as_slice() {
+            ec.fmt_const(f)?;
+            write!(f, ", ")?;
+        }
+        write!(f, "])")
+    }
+}
+
+#[cfg(feature = "perfectmap")]
+impl<const N:usize> phf_shared::PhfBorrow<Word<N>> for Word<N> {
+    fn borrow(&self) -> &Word<N> {
+        self
+    }
+}
+
 impl<const N:usize> fmt::Debug for Word<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "W{}({})", N, self.0.iter().map(|e| (*e).into():char).collect():String)
+        write!(f, "W{}({})", N, self.0.iter().copied().map(Into::<char>::into).collect::<String>())
     }
 }
 
@@ -419,9 +449,10 @@ impl MatrixIndex {
                 })
             }
             if let Some(new_row) = self.row.checked_add(1) {
+                let row_as_usize:usize = self.row.into();
                 return Some(Self{
                     row: new_row,
-                    col: (self.row.into():usize).try_into().unwrap(),
+                    col: (row_as_usize).try_into().unwrap(),
                 })
             }
             None
@@ -433,8 +464,9 @@ impl MatrixIndex {
                 })
             }
             if let Some(new_col) = self.col.checked_add(1) {
+                let col_as_usize:usize = new_col.into();
                 return Some(Self{
-                    row: (new_col.into():usize).try_into().unwrap(),
+                    row: (col_as_usize).try_into().unwrap(),
                     col: new_col,
                 })
             }
@@ -461,7 +493,8 @@ impl MatrixIndex {
                 })
             } else { unreachable!() }
         } else {
-            if Some(self.row.into():usize) == self.col.checked_add(1).map(|a| a.into():usize) {
+            let row_as_usize:usize = self.row.into();
+            if Some(row_as_usize) == self.col.checked_add(1).map(|a| a.into()) {
                 if let Some(new_row) = self.row.checked_sub(1) {
                     Some(Self{
                         row: new_row,
@@ -541,7 +574,7 @@ impl<T: fmt::Debug> fmt::Debug for GenericMatrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         writeln!(f, "Matrix(")?;
         for row in RowIndex::all_values() {
-            writeln!(f, "    {}",ColIndex::all_values().map(|col| format!("{:?} ", self[MatrixIndex{row,col}])).collect():String)?
+            writeln!(f, "    {}",ColIndex::all_values().map(|col| format!("{:?} ", self[MatrixIndex{row,col}])).collect::<String>())?
         }
         write!(f, ")")
     }
@@ -591,27 +624,21 @@ pub mod dim_row {
         }
     }
 
-    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
+    #[cfg(not(feature = "serial"))]
     pub fn get_my_index(mi: MatrixIndex) -> Index {
         mi.row
     }
 
-    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
+    #[cfg(not(feature = "serial"))]
     pub fn get_word_intersecting_point(matrix: WordMatrix, point: MatrixIndex) -> Word {
         index_matrix(matrix, get_my_index(point))
     }
 
-    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
-    pub fn prefix_map(map: &WordPrefixMap) -> &TheMap<Word,CharSet> {
+    pub fn prefix_map<T, U>(map: &GenericWordPrefixMap<T, U>) -> &T {
         map.rows()
     }
 
-    #[cfg(feature = "serial")]
-    pub fn prefix_map(map: &SerialPrefixMaps) -> &SingleDimSerialPrefixMap {
-        map.rows()
-    }
-
-    pub fn prefix_map_mut(map: &mut WordPrefixMap) -> &mut TheMap<Word,CharSet> {
+    pub fn prefix_map_mut<T, U>(map: &mut GenericWordPrefixMap<T, U>) -> &mut T {
         map.rows_mut()
     }
 
@@ -636,6 +663,9 @@ pub mod dim_row {
             })
         } else { None }
     }
+
+    pub const MAIN_AXIS_NAME_LOWER:&str = "row";
+    pub const MAIN_AXIS_NAME_CAPS:&str = "ROW";
 }
 
 #[cfg_attr(feature = "square", allow(dead_code))]
@@ -661,33 +691,33 @@ pub mod dim_col {
         }
     }
 
-    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
+    #[cfg(not(feature = "serial"))]
     pub fn get_my_index(mi: MatrixIndex) -> Index {
         mi.col
     }
 
-    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
+    #[cfg(not(feature = "serial"))]
     pub fn get_word_intersecting_point(matrix: WordMatrix, point: MatrixIndex) -> Word {
         index_matrix(matrix, get_my_index(point))
     }
 
-    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
-    pub fn prefix_map(map: &WordPrefixMap) -> &TheMap<Word,CharSet> {
+    #[cfg(not(feature = "square"))]
+    pub fn prefix_map<T, U>(map: &GenericWordPrefixMap<U, T>) -> &T {
         map.cols()
     }
 
-    #[cfg(feature = "serial")]
-    pub fn prefix_map(map: &SerialPrefixMaps) -> &SingleDimSerialPrefixMap {
-        map.cols()
+    #[cfg(feature = "square")]
+    pub fn prefix_map<T>(map: &GenericWordPrefixMap<T, T>) -> &T {
+        map.rows()
     }
 
     #[cfg(not(feature = "square"))]
-    pub fn prefix_map_mut(map: &mut WordPrefixMap) -> &mut TheMap<Word,CharSet> {
+    pub fn prefix_map_mut<T,U>(map: &mut GenericWordPrefixMap<U, T>) -> &mut T {
         map.cols_mut()
     }
 
     #[cfg(feature = "square")]
-    pub fn prefix_map_mut(_map: &mut WordPrefixMap) -> &mut TheMap<Word,CharSet> {
+    pub fn prefix_map_mut<T, U>(_map: &mut GenericWordPrefixMap<T, U>) -> &mut T {
         unreachable!()
     }
 
@@ -712,6 +742,9 @@ pub mod dim_col {
             })
         } else { None }
     }
+
+    pub const MAIN_AXIS_NAME_LOWER:&str = "col";
+    pub const MAIN_AXIS_NAME_CAPS:&str = "COL";
 }
 
 // This little hack is extremely useful for IDE completions when using the each_dimension macros
@@ -719,39 +752,74 @@ pub mod dim_col {
 #[allow(dead_code)]
 pub use dim_row as dim;
 
-#[cfg(not(feature = "btreemap"))]
-pub type TheMap<K, V> = FnvHashMap<K, V>;
 #[cfg(feature = "btreemap")]
 pub type TheMap<K, V> = std::collections::BTreeMap<K, V>;
+#[cfg(feature = "perfectmap")]
+pub type TheMap<K, V> = phf::map::Map<K, V>;
+#[cfg(not(any(feature = "btreemap", feature = "perfectmap")))]
+pub type TheMap<K, V> = FnvHashMap<K, V>;
+
+#[cfg(feature = "perfectmap")]
+pub type DynamicMap<K, V> = FnvHashMap<K, V>;
+#[cfg(not(feature = "perfectmap"))]
+pub type DynamicMap<K, V> = TheMap<K, V>;
 
 pub type TheSet<V> = fnv::FnvHashSet<V>;
 
 #[derive(Debug,Default)]
-pub struct WordPrefixMap {
-    inner_rows: TheMap<WideWord,CharSet>,
+pub struct GenericWordPrefixMap<R, C>
+{
+    inner_rows: R,
     #[cfg(not(feature = "square"))]
-    inner_cols: TheMap<TallWord,CharSet>,
+    inner_cols: C,
+    #[cfg(feature = "square")]
+    shutup_the_rust_compiler: std::marker::PhantomData<C>,
 }
 
-impl WordPrefixMap {
-    pub fn rows(&self) -> &TheMap<WideWord,CharSet> {
+#[cfg(feature = "perfectmap")]
+pub type WordPrefixMap = GenericWordPrefixMap<&'static TheMap<WideWord, CharSet>, &'static TheMap<TallWord, CharSet>>;
+#[cfg(not(feature = "perfectmap"))]
+pub type WordPrefixMap = GenericWordPrefixMap<TheMap<WideWord, CharSet>, TheMap<TallWord, CharSet>>;
+pub type DynamicWordPrefixMap = GenericWordPrefixMap<DynamicMap<WideWord, CharSet>, DynamicMap<TallWord, CharSet>>;
+
+impl<R, C> GenericWordPrefixMap<R, C>
+{
+    #[cfg(feature = "square")]
+    pub const fn new(r: R) -> Self {
+        Self{
+            inner_rows: r,
+            shutup_the_rust_compiler: std::marker::PhantomData,
+        }
+    }
+
+    #[cfg(not(feature = "square"))]
+    pub const fn new(r: R, c: C) -> Self {
+        Self{
+            inner_rows: r,
+            inner_cols: c,
+        }
+    }
+
+    pub fn rows(&self) -> &R {
         &self.inner_rows
     }
 
-    #[allow(dead_code)]
-    pub fn cols(&self) -> &TheMap<TallWord,CharSet> {
-        #[cfg(not(feature = "square"))]
-        return &self.inner_cols;
-        #[cfg(feature = "square")]
-        return self.rows();
+    #[cfg(feature = "square")]
+    pub fn cols(&self) -> &R {
+        &self.inner_rows
     }
 
-    pub fn rows_mut(&mut self) -> &mut TheMap<WideWord,CharSet> {
+    #[cfg(not(feature = "square"))]
+    pub fn cols(&self) -> &C {
+        &self.inner_cols
+    }
+
+    pub fn rows_mut(&mut self) -> &mut R {
         &mut self.inner_rows
     }
 
     #[cfg(not(feature = "square"))]
-    pub fn cols_mut(&mut self) -> &mut TheMap<TallWord,CharSet> {
+    pub fn cols_mut(&mut self) -> &mut C {
         &mut self.inner_cols
     }
 }
@@ -773,6 +841,8 @@ macro_rules! each_dimension {
     };
 }
 
+pub use each_dimension;
+
 #[macro_export]
 macro_rules! each_unique_dimension {
     ($dim_name:ident, $block:expr) => {
@@ -789,3 +859,5 @@ macro_rules! each_unique_dimension {
         }
     };
 }
+
+pub use each_unique_dimension;

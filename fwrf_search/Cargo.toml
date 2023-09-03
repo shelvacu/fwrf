@@ -1,0 +1,90 @@
+[package]
+name = "fwrf"
+version = "1.0.0"
+edition = "2021"
+resolver = "2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fwrf_lib = { path = "../fwrf_lib", default-features = false }
+clap = "2.33.3"
+crossbeam-channel = "0.5"
+devtimer = "4.0"
+progressing = "3.0.2"
+phf = { version = "0.11.1", optional = true }
+
+
+[build-dependencies]
+fwrf_lib = { path = "../fwrf_lib", default-features = false }
+phf = { version = "0.11.1", default-features = false, optional = true }
+phf_codegen = { version = "0.11.1", optional = true }
+
+# Only needed for phf but can't gate on that
+[profile.dev.build-override]
+opt-level = 3
+
+# These options trade some compile time for hopefully faster code.
+# Particularly lto = true and codegen-units = 1
+[profile.release]
+opt-level = 3
+debug = false
+overflow-checks = false
+lto = true
+codegen-units = 1
+panic = 'abort'
+
+[features]
+do-debug = ["fwrf_lib/do-debug"]
+unchecked = ["fwrf_lib/unchecked"]
+more-unchecked = ["fwrf_lib/more-unchecked"]
+fnvmap = ["fwrf_lib/fnvmap"]
+btreemap = ["fwrf_lib/btreemap"]
+serial = ["fwrf_lib/serial"]
+perfectmap = ["fwrf_lib/perfectmap", "phf", "phf_codegen"]
+
+row-by-row = ["fwrf_lib/row-by-row"]
+weave = ["fwrf_lib/weave"]
+
+charset-english-small = ["fwrf_lib/charset-english-small"]
+charset-english-extended = ["fwrf_lib/charset-english-extended"]
+
+charset-size-32 = ["fwrf_lib/charset-size-32"]
+charset-size-64 = ["fwrf_lib/charset-size-64"]
+# To indicate that width is the same as height.
+square = ["fwrf_lib/square"]
+
+width-2 = ["fwrf_lib/width-2"]
+width-3 = ["fwrf_lib/width-3"]
+width-4 = ["fwrf_lib/width-4"]
+width-5 = ["fwrf_lib/width-5"]
+width-6 = ["fwrf_lib/width-6"]
+width-7 = ["fwrf_lib/width-7"]
+width-8 = ["fwrf_lib/width-8"]
+width-9 = ["fwrf_lib/width-9"]
+width-10 = ["fwrf_lib/width-10"]
+width-11 = ["fwrf_lib/width-11"]
+width-12 = ["fwrf_lib/width-12"]
+width-13 = ["fwrf_lib/width-13"]
+width-14 = ["fwrf_lib/width-14"]
+width-15 = ["fwrf_lib/width-15"]
+height-2 = ["fwrf_lib/height-2"]
+height-3 = ["fwrf_lib/height-3"]
+height-4 = ["fwrf_lib/height-4"]
+height-5 = ["fwrf_lib/height-5"]
+height-6 = ["fwrf_lib/height-6"]
+height-7 = ["fwrf_lib/height-7"]
+height-8 = ["fwrf_lib/height-8"]
+height-9 = ["fwrf_lib/height-9"]
+height-10 = ["fwrf_lib/height-10"]
+height-11 = ["fwrf_lib/height-11"]
+height-12 = ["fwrf_lib/height-12"]
+height-13 = ["fwrf_lib/height-13"]
+height-14 = ["fwrf_lib/height-14"]
+height-15 = ["fwrf_lib/height-15"]
+
+default-tests = ["fwrf_lib/default-tests"]
+
+#default-unsized = ["charset-english-small", "row-by-row", "fnvmap"]
+default-unsized = ["charset-english-small", "row-by-row", "perfectmap"]
+default = ["width-5", "height-5", "square", "default-unsized"]

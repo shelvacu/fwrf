@@ -2,7 +2,8 @@ use crate::config::*;
 use crate::echar::EncodedChar;
 
 #[derive(Debug,Clone,Copy,Eq,PartialEq,Default)]
-pub struct CharSet(CharSetInner);
+pub struct CharSet(pub u32);
+//pub struct CharSet(pub CharSetInner);
 
 impl CharSet {
     pub fn set(&mut self, e: EncodedChar) {

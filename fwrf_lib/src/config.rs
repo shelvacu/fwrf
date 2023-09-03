@@ -68,21 +68,21 @@ pub type CharSetInner = u128;
 pub const CHAR_SET_SIZE:usize = std::mem::size_of::<CharSetInner>() * 8;
 pub const CHAR_SET_SIZE_U16:u16 = CHAR_SET_SIZE as u16;
 const CHAR_SET_SIZE_MINUS_1:usize = CHAR_SET_SIZE - 1;
-//pub type CharSetRanged = deranged::Usize<0,CHAR_SET_SIZE_MINUS_1>;
+pub type CharSetRanged = deranged::Usize<0,CHAR_SET_SIZE_MINUS_1>;
 
-// #[cfg(feature = "square")]
-// static_assertions::const_assert_eq!(
-//     // Compile error? You have the feature "square" enabled when you shouldn't
-//     WORD_SQUARE_HEIGHT,
-//     WORD_SQUARE_WIDTH,
-// );
+#[cfg(feature = "square")]
+static_assertions::const_assert_eq!(
+    // Compile error? You have the feature "square" enabled when you shouldn't
+    WORD_SQUARE_HEIGHT,
+    WORD_SQUARE_WIDTH,
+);
 
-// #[cfg(not(feature = "square"))]
-// static_assertions::const_assert_ne!(
-//     // Compile error? You have the feature flag "square" missing
-//     WORD_SQUARE_HEIGHT,
-//     WORD_SQUARE_WIDTH,
-// );
+#[cfg(not(feature = "square"))]
+static_assertions::const_assert_ne!(
+    // Compile error? You have the feature flag "square" missing
+    WORD_SQUARE_HEIGHT,
+    WORD_SQUARE_WIDTH,
+);
 
 //// Waiting on https://github.com/nvzqz/static-assertions-rs/pull/48
 // static_assertions::assert_one_feature!("fnvmap", "btreemap", "serial", "perfect");

@@ -8,17 +8,13 @@ macro_rules! highly_unsafe_garuntee {
     }
 }
 
-mod config;
-mod echar;
-mod charset;
-mod wordstuffs;
-#[cfg(feature = "serial")]
-mod serial_prefix_map;
-mod binary_searched_array_map;
-mod bsam2;
+use fwrf_lib::*;
 
-use std::io::{self, BufReader};
+use std::io;
+#[cfg(not(feature = "perfectmap"))]
+use std::io::BufReader;
 use std::io::prelude::*;
+#[cfg(not(feature = "perfectmap"))]
 use std::fs::File;
 
 use progressing::{
@@ -43,208 +39,224 @@ const DEBUG:bool = true;
 #[cfg(not(feature = "do-debug"))]
 const DEBUG:bool = false;
 
+#[cfg(feature = "perfectmap")]
+mod perfect_map;
+
 fn main() -> io::Result<()> {
-    let args = App::new(format!("Fast Word Rectangle Finder o{}x{}", config::WORD_SQUARE_WIDTH, config::WORD_SQUARE_HEIGHT))
-        .version(clap::crate_version!())
-        .author(clap::crate_authors!())
-        .about(clap::crate_description!())
-        .arg(Arg::with_name("threads")
-            .default_value(if DEBUG { "1" } else {"4"})
-            .takes_value(true)
-            .validator(|arg| {
-                match arg.parse::<u32>() {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(format!("Must provide a valid integer. {:?}", e)),
-                }
-            })
-            .help("Number of threads to use.")
-            .long("threads")
-            .short("t")
-        )
-        .arg(Arg::with_name("wordlist")
-            .required(true)
-            .help("the wordlist file path, a plain-text UTF-8 file with each word separated by a newline. Use - for stdin")
-        )
-        .arg(Arg::with_name("ignore-empty-wordlist")
-            .long("ignore-empty-wordlist")
-            .short("e")
-            .help("Don't complain if there are no words of the necessary length in the given wordlist")
-        )
-        .arg(Arg::with_name("ignore-unencodeable")
-            .long("ignore-unencodeable")
-            .short("u")
-            .help("Don't show a warning when a word is dropped because it contains unencodeable characters.")
-        )
-        .arg(Arg::with_name("quiet")
-            .long("quiet")
-            .short("q")
-            .help("Don't show any status messages; STDERR will be empty if no errors/warnings occured. (See also --ignore-*)")
-        )
-        .arg(Arg::with_name("show-progress")
-            .long("show-progress")
-            .short("p")
-            .help("Show a progress bar on STDERR")
-        )
-        .arg(Arg::with_name("must-include")
-            .long("must-include")
-            .short("m")
-            .takes_value(true)
-            .help("Only search for word rectangles that include all of the given comma-separated words. These words are automatically added to the wordlist.")
-        )
-        .arg(Arg::with_name("fancy-output")
-            .long("fancy-output")
-            .short("f")
-            .help("Shows output word rectangles across multiple lines (easier to see column words that way) and unbuffered. May be a significant slowdown if many results are produced.")
-        )
-        .arg(Arg::with_name("filter-aa")
-            .long("filter-aa")
-            .short("a")
-            .help("Filters words of all the same letter (like 'aaaaaa')")
-        )
-        .arg(Arg::with_name("count")
-            .long("count")
-            .short("c")
-            .help("Does not output any word rects, instead outputs a count of how many were found")
-        )
-        .arg(Arg::with_name("templates")
-            .long("templates")
-            .takes_value(true)
-            .help(r#"A "pattern" the square must conform to. Much faster than filtering for a pattern after with grep or whatever. Compatible with --must-include. Use & to match any character, and separate each template with ! and each line within with |."#)
-        )
-        .get_matches()
-    ;
+    let app = App::new(format!("Fast Word Rectangle Finder o{}x{}", config::WORD_SQUARE_WIDTH, config::WORD_SQUARE_HEIGHT));
+    let app = app.version(clap::crate_version!());
+    let app = app.author(clap::crate_authors!());
+    let app = app.about(clap::crate_description!());
+    let app = app.arg(Arg::with_name("threads")
+        .default_value(if DEBUG { "1" } else {"4"})
+        .takes_value(true)
+        .validator(|arg| {
+            match arg.parse::<u32>() {
+                Ok(_) => Ok(()),
+                Err(e) => Err(format!("Must provide a valid integer. {:?}", e)),
+            }
+        })
+        .help("Number of threads to use.")
+        .long("threads")
+        .short("t")
+    );
+    #[cfg(not(feature = "perfectmap"))]
+    let app = app.arg(Arg::with_name("wordlist")
+        .required(std::env::var_os("WORDLIST_FN").is_none())
+        .help("the wordlist file path, a plain-text UTF-8 file with each word separated by a newline. Use - for stdin")
+    );
+    #[cfg(not(feature = "perfectmap"))]
+    let app = app.arg(Arg::with_name("ignore-empty-wordlist")
+        .long("ignore-empty-wordlist")
+        .short("e")
+        .help("Don't complain if there are no words of the necessary length in the given wordlist")
+    );
+    #[cfg(not(feature = "perfectmap"))]
+    let app = app.arg(Arg::with_name("ignore-unencodeable")
+        .long("ignore-unencodeable")
+        .short("u")
+        .help("Don't show a warning when a word is dropped because it contains unencodeable characters.")
+    );
+    let app = app.arg(Arg::with_name("quiet")
+        .long("quiet")
+        .short("q")
+        .help("Don't show any status messages; STDERR will be empty if no errors/warnings occured. (See also --ignore-*)")
+    );
+    let app = app.arg(Arg::with_name("show-progress")
+        .long("show-progress")
+        .short("p")
+        .help("Show a progress bar on STDERR")
+    );
+    #[cfg(not(feature = "perfectmap"))]
+    let app = app.arg(Arg::with_name("must-include")
+        .long("must-include")
+        .short("m")
+        .takes_value(true)
+        .help("Only search for word rectangles that include all of the given comma-separated words. These words are automatically added to the wordlist.")
+    );
+    let app = app.arg(Arg::with_name("fancy-output")
+        .long("fancy-output")
+        .short("f")
+        .help("Shows output word rectangles across multiple lines (easier to see column words that way) and unbuffered. May be a significant slowdown if many results are produced.")
+    );
+    #[cfg(not(feature = "perfectmap"))]
+    let app = app.arg(Arg::with_name("filter-aa")
+        .long("filter-aa")
+        .short("a")
+        .help("Filters words of all the same letter (like 'aaaaaa')")
+    );
+    let app = app.arg(Arg::with_name("count")
+        .long("count")
+        .short("c")
+        .help("Does not output any word rects, instead outputs a count of how many were found")
+    );
+    #[cfg(not(feature = "perfectmap"))]
+    let app = app.arg(Arg::with_name("templates")
+        .long("templates")
+        .takes_value(true)
+        .help(r#"A "pattern" the square must conform to. Much faster than filtering for a pattern after with grep or whatever. Compatible with --must-include. Use & to match any character, and separate each template with ! and each line within with |."#)
+    );
+    let args = app.get_matches();
     
     let loud = !args.is_present("quiet");
-    let ignore_empty_wordlist = args.is_present("ignore-empty-wordlist");
-    let ignore_unencodeable = args.is_present("ignore-unencodeable");
     let fancy = args.is_present("fancy-output");
     let show_progress = args.is_present("show-progress");
     let num_threads:u32 = args.value_of("threads").unwrap().parse().unwrap();
-    let filter_aa = args.is_present("filter-aa");
     let count_rects = args.is_present("count");
-    let arg_templates = args.value_of("templates");
 
-    let filename = args.value_of("wordlist").unwrap();
-    let f:BufReader<Box<dyn Read>> = if filename == "-" {
-        BufReader::new(Box::new(std::io::stdin()))
-    } else {
-        BufReader::new(Box::new(File::open(filename)?))
-    };
 
+    #[cfg(not(feature = "perfectmap"))]
+    let mut templates;
+    #[cfg(not(feature = "perfectmap"))]
     let mut words:TheSet<EitherWord> = Default::default();
+    #[cfg(not(feature = "perfectmap"))]
+    {
+        let ignore_empty_wordlist = args.is_present("ignore-empty-wordlist");
+        let ignore_unencodeable = args.is_present("ignore-unencodeable");
+        let filter_aa = args.is_present("filter-aa");
+        let arg_templates = args.value_of("templates");
+        let aaaaaaa = std::env::var("WORDLIST_FN");
+        let aaaaaaaa = aaaaaaa.as_ref();
+        let filename = args.value_of("wordlist").unwrap_or_else(|| aaaaaaaa.map(String::as_str).unwrap());
+        let f:BufReader<Box<dyn Read>> = if filename == "-" {
+            BufReader::new(Box::new(std::io::stdin()))
+        } else {
+            BufReader::new(Box::new(File::open(filename)?))
+        };
 
-    let mut lineno = 1;
-    for maybe_line in f.lines() {
-        if maybe_line.is_err() { eprintln!("Error on line {}", lineno); }
-        let line = maybe_line.unwrap();
-        lineno += 1;
-        match EitherWord::from_str_no_nulls(line.as_str()) {
-            Ok(w) => {
-                let s = w.as_slice();
-                let mut all_same = true;
-                for i in 1..s.len() {
-                    all_same = all_same && s[0] == s[i];
-                }
-                if !filter_aa || !all_same {
-                    words.insert(w);
-                }
-            },
-            Err(WordConversionError::WrongLength) => (),
-            Err(e) => {
-                if !ignore_unencodeable {
-                    panic!("Could not encode {:?} due to {:?}", &line, e);
+        let mut lineno = 1;
+        for maybe_line in f.lines() {
+            if maybe_line.is_err() { eprintln!("Error on line {}", lineno); }
+            let line = maybe_line.unwrap();
+            lineno += 1;
+            match EitherWord::from_str_no_nulls(line.as_str()) {
+                Ok(w) => {
+                    let s = w.as_slice();
+                    let mut all_same = true;
+                    for i in 1..s.len() {
+                        all_same = all_same && s[0] == s[i];
+                    }
+                    if !filter_aa || !all_same {
+                        words.insert(w);
+                    }
+                },
+                Err(WordConversionError::WrongLength) => (),
+                Err(e) => {
+                    if !ignore_unencodeable {
+                        panic!("Could not encode {:?} due to {:?}", &line, e);
+                    }
                 }
             }
         }
-    }
-    
-    let must_include_strings:Vec<String> = args
-        .value_of("must-include")
-        .map(|s| s
-            .split(',')
-            .map(str::to_string)
-            .collect()
-        )
-        .unwrap_or_default();
+        
+        let must_include_strings:Vec<String> = args
+            .value_of("must-include")
+            .map(|s| s
+                .split(',')
+                .map(str::to_string)
+                .collect()
+            )
+            .unwrap_or_default();
 
-    // This is purposefully *not* a hashset, a word that appears twice in the must_include list must appear twice in any result word rectangles.
-    let mut must_include:Vec<EitherWord> = Vec::new();
+        // This is purposefully *not* a hashset, a word that appears twice in the must_include list must appear twice in any result word rectangles.
+        let mut must_include:Vec<EitherWord> = Vec::new();
 
-    for include_str in &must_include_strings {
-        match EitherWord::from_str_with_nulls(include_str.as_str()) {
-            Ok(word) => {
-                must_include.push(word);
-                words.insert(word);
-            },
-            Err(WordConversionError::WrongLength) => {
-                if ignore_empty_wordlist {
-                    std::process::exit(0);
-                } else {
-                    panic!("Must-use word {:?} length do not match dimensions.", include_str);
-                }
-            },
-            Err(e @ WordConversionError::UnencodeableChar(_,_)) => {
-                panic!("Error encoding must-use word {:?} due to {:?}", include_str, e);
-            },
-            Err(WordConversionError::NullChar) => unreachable!(),
-        }
-    }
-
-    assert_eq!(must_include.len(), must_include_strings.len());
-
-    if show_progress && !must_include.is_empty() {
-        eprintln!("ERR: Cannot use both show-progress and must-use together.");
-        std::process::exit(1);
-    }
-
-    let templates = if let Some(arg_templates) = arg_templates {
-        let mut res = vec![];
-        let thing:Vec<Vec<&str>> = arg_templates.split('!').map(|s| s.split('|').collect()).collect();
-        for (i, rect) in thing.into_iter().enumerate() {
-            if rect.len() != WORD_SQUARE_HEIGHT {
-                eprintln!("Error: Incorrect number of words in template {}", i);
-                std::process::exit(1);
+        for include_str in &must_include_strings {
+            match EitherWord::from_str_with_nulls(include_str.as_str()) {
+                Ok(word) => {
+                    must_include.push(word);
+                    words.insert(word);
+                },
+                Err(WordConversionError::WrongLength) => {
+                    if ignore_empty_wordlist {
+                        std::process::exit(0);
+                    } else {
+                        panic!("Must-use word {:?} length do not match dimensions.", include_str);
+                    }
+                },
+                Err(e @ WordConversionError::UnencodeableChar(_,_)) => {
+                    panic!("Error encoding must-use word {:?} due to {:?}", include_str, e);
+                },
+                Err(WordConversionError::NullChar) => unreachable!(),
             }
-            let mut m = WordMatrix::default();
-            for (j, word) in rect.into_iter().enumerate() {
-                if word.len() != WORD_SQUARE_WIDTH {
-                    eprintln!("Error: Incorrect number of letters in word {} in template {}", j, i);
+        }
+
+        assert_eq!(must_include.len(), must_include_strings.len());
+
+        if show_progress && !must_include.is_empty() {
+            eprintln!("ERR: Cannot use both show-progress and must-use together.");
+            std::process::exit(1);
+        }
+
+        templates = if let Some(arg_templates) = arg_templates {
+            let mut res = vec![];
+            let thing:Vec<Vec<&str>> = arg_templates.split('!').map(|s| s.split('|').collect()).collect();
+            for (i, rect) in thing.into_iter().enumerate() {
+                if rect.len() != WORD_SQUARE_HEIGHT {
+                    eprintln!("Error: Incorrect number of words in template {}", i);
                     std::process::exit(1);
                 }
-                let row:RowIndex = j.try_into().unwrap();
-                for (k, c) in word.chars().enumerate() {
-                    let col:ColIndex = k.try_into().unwrap();
-                    let e:EncodedChar = c.try_into().expect("Not a valid char in template");
-                    m[MatrixIndex{row, col}] = e;
+                let mut m = WordMatrix::default();
+                for (j, word) in rect.into_iter().enumerate() {
+                    if word.len() != WORD_SQUARE_WIDTH {
+                        eprintln!("Error: Incorrect number of letters in word {} in template {}", j, i);
+                        std::process::exit(1);
+                    }
+                    let row:RowIndex = j.try_into().unwrap();
+                    for (k, c) in word.chars().enumerate() {
+                        let col:ColIndex = k.try_into().unwrap();
+                        let e:EncodedChar = c.try_into().expect("Not a valid char in template");
+                        m[MatrixIndex{row, col}] = e;
+                    }
                 }
+
+                res.push(m);
             }
+            res
+        } else { vec![Default::default()] };
 
-            res.push(m);
+        templates = make_templates(must_include.as_slice(), templates);
+
+        if DEBUG {
+            dbg!(&templates);
         }
-        res
-    } else { vec![Default::default()] };
 
-    let templates:Vec<WordMatrix> = make_templates(must_include.as_slice(), templates);
-
-    if DEBUG {
-        dbg!(&templates);
-    }
-
-    if templates.is_empty() {
-        if ignore_empty_wordlist {
-            std::process::exit(0);
-        } else {
-            panic!("must-use words can not be fit together.");
+        if templates.is_empty() {
+            if ignore_empty_wordlist {
+                std::process::exit(0);
+            } else {
+                panic!("must-use words can not be fit together.");
+            }
         }
-    }
 
-    if loud {
-        eprintln!("Word rectangle order {}x{}", config::WORD_SQUARE_WIDTH, config::WORD_SQUARE_HEIGHT);
-        eprintln!("Start: creating index");
-    }
+        if loud {
+            eprintln!("Word rectangle order {}x{}", config::WORD_SQUARE_WIDTH, config::WORD_SQUARE_HEIGHT);
+            eprintln!("Start: creating index");
+        }
 
-    if !ignore_empty_wordlist && words.is_empty() {
-        panic!("No words in wordlist!");
+        if !ignore_empty_wordlist && words.is_empty() {
+            panic!("No words in wordlist!");
+        }
     }
 
     if loud {
@@ -290,7 +302,9 @@ fn main() -> io::Result<()> {
     time.start();
 
     let count = outer_compute(
+        #[cfg(not(feature = "perfectmap"))]
         words,
+        #[cfg(not(feature = "perfectmap"))]
         templates.as_slice(),
         num_threads as usize,
         compute_func,
@@ -309,6 +323,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(not(feature = "perfectmap"))]
 fn make_templates(
     must_use: &[EitherWord],
     from_templates: Vec<WordMatrix>,
@@ -332,20 +347,30 @@ fn make_templates(
 }
 
 fn outer_compute(
+    #[cfg(not(feature = "perfectmap"))]
     wordlist: TheSet<EitherWord>,
+    #[cfg(not(feature = "perfectmap"))]
     templates: &[WordMatrix],
     num_threads: usize,
     output_func: impl 'static + Send + FnOnce(std::sync::mpsc::Receiver<WordMatrix>) -> Result<(), std::io::Error>,
     show_progress: bool,
     count_rects: bool,
 ) -> u64 {
+    #[cfg(not(feature = "perfectmap"))]
     use std::sync::Arc;
     #[cfg(feature = "serial")]
-    let prefix_map = serial_prefix_map::SerialPrefixMaps::new(&make_prefix_map(WordMatrix::default(), wordlist.iter().copied()).2);
+    let prefix_map = serial_prefix_map::build_serial_prefix_map(&make_prefix_map(WordMatrix::default(), wordlist.iter().copied()).2);
     #[cfg(feature = "serial")]
     let prefix_map_arc = Arc::new(prefix_map);
 
+    #[cfg(feature = "perfectmap")]
+    let templates_owned = [WordMatrix::default()];
+    #[cfg(feature = "perfectmap")]
+    let templates = templates_owned.as_slice();
+
+    #[cfg(not(feature = "perfectmap"))]
     let wordlist_arc = Arc::new(wordlist);
+
     let (count_tx, count_rx) = crossbeam_channel::bounded::<u64>(2);
     // "w2m" => worker threads to output thread
     let (w2m_tx, w2m_rx) = std::sync::mpsc::sync_channel(4);
@@ -375,8 +400,14 @@ fn outer_compute(
             let txc = w2m_tx.clone();
             let countc = count_tx.clone();
             let progc = prog_tx.clone();
+            
+            #[cfg(not(feature = "perfectmap"))]
             let my_prefix_map = Arc::clone(&prefix_map_arc);
+            #[cfg(not(feature = "perfectmap"))]
             let my_wordlist = Arc::clone(&wordlist_arc);
+
+            #[cfg(feature = "perfectmap")]
+            let my_prefix_map = &perfect_map::THE_MAP;
             worker_handles.push(
                 std::thread::spawn( move || {
                     let mut thread_count = 0;
@@ -386,6 +417,7 @@ fn outer_compute(
                             msg,
                             MatrixIndex{row: RowIndex::MAX, col: ColIndex::MAX},
                             |a| {
+                                #[cfg(not(feature = "perfectmap"))]
                                 each_dimension!(dim, {
                                     for i in dim::Index::all_values() {
                                         let word = dim::index_matrix(a, i);
@@ -412,7 +444,10 @@ fn outer_compute(
             );
         }
 
+        #[cfg(not(feature = "perfectmap"))]
         let a = &*prefix_map_arc;
+        #[cfg(feature = "perfectmap")]
+        let a = &perfect_map::THE_MAP;
         let mut mi = MatrixIndex::ZERO;
         {
             let mut nulls_so_far = 0;
@@ -480,61 +515,9 @@ fn outer_compute(
     full_count
 }
 
-// It is assumed that this function does *not* need to be fast, and should be written in whatever way is reasonably fast and most correct and elegant.
-fn make_prefix_map<I>
-(
-    template: WordMatrix,
-    wordlist: I,
-) -> (usize, usize, WordPrefixMap)
-where
-    I: IntoIterator<Item = EitherWord>,
-{
-    let mut word_counts = [0usize; 2];
-    let mut res:WordPrefixMap = Default::default();
-    let mut word_templates = (vec![], vec![]);
-    each_dimension!(dim, {
-        let my_templates = dim::index_tuple_mut(&mut word_templates);
-        for i in dim::Index::all_values() {
-            let word = dim::index_matrix(template, i);
-            my_templates.push(word);
-        }
-        my_templates.sort();
-        my_templates.dedup();
-    });
-    #[cfg(feature = "square")]
-    {
-        for el in &word_templates.1 {
-            word_templates.0.push(*el);
-        }
-        word_templates.0.sort();
-        word_templates.0.dedup();
-    }
-    for w in wordlist {
-        each_unique_dimension!(dim, {
-            if let Some(w) = dim::get_from_either(w) {
-                word_counts[dim::DIMENSION_ID] += 1;
-                for c in &*w { assert_ne!(*c, NULL_CHAR); }
-                for &template in dim::index_tuple(&word_templates) {
-                    if template.is_match(w) {
-                        let p = w.prefixes(template);
-                        for (prefix,c) in p {
-                            dim::prefix_map_mut(&mut res).entry(prefix).or_default().set(c);
-                        }
-                    }
-                }
-            }
-        })
-    }
-    let row_counts = word_counts[wordstuffs::dim_row::DIMENSION_ID];
-    #[cfg(feature = "square")]
-    let col_counts = row_counts;
-    #[cfg(not(feature = "square"))]
-    let col_counts = word_counts[wordstuffs::dim_col::DIMENSION_ID];
-    (row_counts, col_counts, res)
-}
 
 fn compute<'a, F: FnMut(WordMatrix)>(
-    #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
+    #[cfg(not(feature = "serial"))]
     prefix_map: &WordPrefixMap,
     #[cfg(feature = "serial")]
     prefix_map: &'a SerialPrefixMaps,
@@ -586,7 +569,7 @@ fn compute<'a, F: FnMut(WordMatrix)>(
                 cur_evil.charset()
             });
             if orig_matrix[at_idx] == NULL_CHAR {
-                #[cfg(any(feature = "fnvmap", feature = "btreemap"))]
+                #[cfg(not(feature = "serial"))]
                 let (row_set, col_set) = each_dimension!(dim, {
                     dim::prefix_map(prefix_map).get(&dim::get_word_intersecting_point(matrix, at_idx)).copied().unwrap_or_default()
                 });
@@ -646,11 +629,13 @@ mod test {
             let mut m = WordMatrix::default();
             assert_eq!(str_a.len(), WORD_SQUARE_HEIGHT);
             for rowi in RowIndex::all_values() {
-                let row_chars:Vec<_> = str_a[rowi.into():usize].chars().collect();
+                let rowi_usize:usize = rowi.into();
+                let row_chars:Vec<_> = str_a[rowi_usize].chars().collect();
                 assert_eq!(row_chars.len(), WORD_SQUARE_WIDTH);
                 for coli in ColIndex::all_values() {
                     let mi = MatrixIndex{row: rowi, col: coli};
-                    m[mi] = row_chars[coli.into():usize].try_into().unwrap();
+                    let coli_usize:usize = coli.into();
+                    m[mi] = row_chars[coli_usize].try_into().unwrap();
                 }
             }
             m
@@ -667,8 +652,6 @@ mod test {
 
         let their_results_mutex = Arc::clone(&results_mutex);
         outer_compute(
-            wordlist,
-            templates.as_slice(),
             1,
             move |rx| {
                 let mut results_lock = their_results_mutex.lock().unwrap();

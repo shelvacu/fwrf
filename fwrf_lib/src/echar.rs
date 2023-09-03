@@ -4,12 +4,29 @@ use core::fmt;
 use crate::config::*;
 
 #[derive(PartialEq,Eq,PartialOrd,Ord,Copy,Clone,Hash)]
-pub struct EncodedChar(u8);
+pub struct EncodedChar(pub u8);
+
+
+#[cfg(feature = "perfectmap")]
+impl phf::PhfHash for EncodedChar {
+    #[inline]
+    fn phf_hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.phf_hash(state)
+    }
+}
+
+#[cfg(feature = "perfectmap")]
+impl phf_shared::FmtConst for EncodedChar {
+    fn fmt_const(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "::fwrf_lib::echar::EncodedChar({})", self.0)
+    }
+}
 
 impl fmt::Debug for EncodedChar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         if *self == NULL_CHAR || (self.0 as usize) < CHAR_SET_SIZE {
-            write!(f, "E{}", (*self).into():char)
+            let as_char:char = (*self).into();
+            write!(f, "E{}", as_char)
         } else {
             write!(f, "E{}", self.0)
         }
@@ -78,7 +95,8 @@ macro_rules! encoded_char_impls {
         impl From<CharSetRanged> for EncodedChar {
             #[forbid(unreachable_patterns)]
             fn from(value: CharSetRanged) -> EncodedChar {
-                match value.into():usize {
+                let as_usize:usize = value.into();
+                match as_usize {
                     $(
                         $codepoint => Self($codepoint),
                     )*

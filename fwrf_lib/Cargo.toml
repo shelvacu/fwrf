@@ -1,0 +1,74 @@
+[package]
+name = "fwrf_lib"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fnv = "1.0.7"
+static_assertions = "1.1.0"
+phf = { version = "0.11.1", optional = true }
+phf_shared = { version = "0.11.1", optional = true }
+
+[dependencies.deranged]
+git = "https://github.com/shelvacu/deranged"
+branch = "array-indexes"
+#path = "../deranged"
+default-features = false
+features = ["std"]
+
+[features]
+do-debug = []
+unchecked = ["deranged/unsafe-range-assert"]
+more-unchecked = []
+fnvmap = []
+btreemap = []
+serial = []
+perfectmap = ["phf", "phf_shared"]
+
+row-by-row = []
+weave = []
+
+charset-english-small = ["charset-size-32"]
+charset-english-extended = ["charset-size-64"]
+
+charset-size-32 = []
+charset-size-64 = []
+# To indicate that width is the same as height.
+square = []
+
+width-2 = []
+width-3 = []
+width-4 = []
+width-5 = []
+width-6 = []
+width-7 = []
+width-8 = []
+width-9 = []
+width-10 = []
+width-11 = []
+width-12 = []
+width-13 = []
+width-14 = []
+width-15 = []
+height-2 = []
+height-3 = []
+height-4 = []
+height-5 = []
+height-6 = []
+height-7 = []
+height-8 = []
+height-9 = []
+height-10 = []
+height-11 = []
+height-12 = []
+height-13 = []
+height-14 = []
+height-15 = []
+
+default-tests = []
+
+default-unsized = ["charset-english-small", "row-by-row", "perfectmap"]
+default = ["width-5", "height-5", "square", "default-unsized"]

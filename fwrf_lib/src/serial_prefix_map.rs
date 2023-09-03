@@ -20,35 +20,48 @@ fn line_to_charset(line: Line) -> CharSet {
     res
 }
 
-pub struct SerialPrefixMaps {
-    inner_rows: SingleDimSerialPrefixMap,
+pub type SerialPrefixMaps = GenericWordPrefixMap<SingleDimSerialPrefixMap, SingleDimSerialPrefixMap>;
+
+pub fn build_serial_prefix_map(map: &WordPrefixMap) -> SerialPrefixMaps {
+    let rows = SingleDimSerialPrefixMap::build(map.rows());
     #[cfg(not(feature = "square"))]
-    inner_cols: SingleDimSerialPrefixMap,
+    let cols = SingleDimSerialPrefixMap::build(map.cols());
+    SerialPrefixMaps::new(
+        rows,
+        #[cfg(not(feature = "square"))]
+        cols,
+    )
 }
 
-impl SerialPrefixMaps {
-    pub fn new(map: &WordPrefixMap) -> Self {
-        Self {
-            inner_rows: SingleDimSerialPrefixMap::build(map.rows()),
-            #[cfg(not(feature = "square"))]
-            inner_cols: SingleDimSerialPrefixMap::build(map.cols()),
-        }
-    }
+// pub struct SerialPrefixMaps {
+//     inner_rows: SingleDimSerialPrefixMap,
+//     #[cfg(not(feature = "square"))]
+//     inner_cols: SingleDimSerialPrefixMap,
+// }
 
-    pub fn rows(&self) -> &SingleDimSerialPrefixMap {
-        &self.inner_rows
-    }
+// impl SerialPrefixMaps {
+//     pub fn new(map: &WordPrefixMap) -> Self {
+//         Self {
+//             inner_rows: SingleDimSerialPrefixMap::build(map.rows()),
+//             #[cfg(not(feature = "square"))]
+//             inner_cols: SingleDimSerialPrefixMap::build(map.cols()),
+//         }
+//     }
 
-    #[cfg(feature = "square")]
-    pub fn cols(&self) -> &SingleDimSerialPrefixMap {
-        &self.inner_rows
-    }
+//     pub fn rows(&self) -> &SingleDimSerialPrefixMap {
+//         &self.inner_rows
+//     }
 
-    #[cfg(not(feature = "square"))]
-    pub fn cols(&self) -> &SingleDimSerialPrefixMap {
-        &self.inner_cols
-    }
-}
+//     #[cfg(feature = "square")]
+//     pub fn cols(&self) -> &SingleDimSerialPrefixMap {
+//         &self.inner_rows
+//     }
+
+//     #[cfg(not(feature = "square"))]
+//     pub fn cols(&self) -> &SingleDimSerialPrefixMap {
+//         &self.inner_cols
+//     }
+// }
 
 pub struct SingleDimSerialPrefixMap {
     arena: Vec<Line>,
@@ -99,7 +112,8 @@ impl SingleDimSerialPrefixMap {
                 let mut new_word = word;
                 new_word[first_null] = i.into();
                 let offset = end - index;
-                if offset >= Offset::MAX.into():usize {
+                let max_offset:usize = Offset::MAX.into();
+                if offset >= max_offset {
                     panic!("Offset is not big enough for tree");
                 }
                 arena[index][i] = offset.try_into().unwrap();
