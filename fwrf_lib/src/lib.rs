@@ -1,6 +1,5 @@
 #![feature(
     type_ascription,
-    array_zip,
     min_specialization,
     portable_simd,
     iter_array_chunks

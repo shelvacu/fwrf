@@ -52,7 +52,7 @@ impl<const N:usize> fmt::Debug for Word<N> {
 
 impl<const N:usize> Word<N> {
     pub fn is_match(self, other: Self) -> bool {
-        IntoIterator::into_iter(self.0.zip(other.0)).all(|(a,b)| a.is_match(b))
+        self.0.into_iter().zip(other.0.into_iter()).all(|(a,b)| a.is_match(b))
     }
 
     pub fn prefixes(self, pattern: Self) -> Vec<(Self, EncodedChar)> {

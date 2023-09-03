@@ -70,5 +70,6 @@ height-15 = []
 
 default-tests = []
 
-default-unsized = ["charset-english-small", "row-by-row", "perfectmap"]
+#default-unsized = ["charset-english-small", "row-by-row", "perfectmap"]
+default-unsized = ["charset-english-small", "row-by-row", "fnvmap"]
 default = ["width-5", "height-5", "square", "default-unsized"]

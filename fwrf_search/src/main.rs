@@ -1,4 +1,4 @@
-#![feature(type_ascription, array_zip, min_specialization, portable_simd, iter_array_chunks)]
+#![feature(type_ascription, min_specialization, portable_simd, iter_array_chunks)]
 
 
 macro_rules! highly_unsafe_garuntee {
@@ -334,7 +334,8 @@ fn make_templates(
         if let Some(word) = dim::get_from_either(*current_word) {
             for template in &from_templates {
                 for i in dim::Index::all_values() {
-                    if word.is_match(dim::index_matrix(*template, i)) {
+                    let possible_match = dim::index_matrix(*template, i);
+                    if word.is_match(possible_match) && possible_match != word {
                         let mut new_matrix = *template;
                         dim::set_matrix(&mut new_matrix, i, word);
                         to_templates.push(new_matrix);
@@ -413,7 +414,7 @@ fn outer_compute(
                     let mut thread_count = 0;
                     while let Ok(msg) = rxc.recv() {
                         compute(
-                            &my_prefix_map,
+                            &*my_prefix_map,
                             msg,
                             MatrixIndex{row: RowIndex::MAX, col: ColIndex::MAX},
                             |a| {
@@ -652,6 +653,8 @@ mod test {
 
         let their_results_mutex = Arc::clone(&results_mutex);
         outer_compute(
+            wordlist,
+            templates.as_slice(),
             1,
             move |rx| {
                 let mut results_lock = their_results_mutex.lock().unwrap();

@@ -85,6 +85,6 @@ height-15 = ["fwrf_lib/height-15"]
 
 default-tests = ["fwrf_lib/default-tests"]
 
-#default-unsized = ["charset-english-small", "row-by-row", "fnvmap"]
-default-unsized = ["charset-english-small", "row-by-row", "perfectmap"]
+default-unsized = ["charset-english-small", "row-by-row", "fnvmap"]
+#default-unsized = ["charset-english-small", "row-by-row", "perfectmap"]
 default = ["width-5", "height-5", "square", "default-unsized"]

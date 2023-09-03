@@ -1,15 +1,16 @@
-use std::env;
-use std::fs::File;
-use std::io::{BufWriter, BufReader, Write};
-use std::io::BufRead;
-use std::path::Path;
 
-use fwrf_lib::*;
-use wordstuffs::*;
 
 fn main() {
     #[cfg(feature = "perfectmap")]
     {
+        use std::env;
+        use std::fs::File;
+        use std::io::{BufWriter, BufReader, Write};
+        use std::io::BufRead;
+        use std::path::Path;
+        
+        use fwrf_lib::*;
+        use wordstuffs::*;
         // TODO: make these better configurable
         let filter_aa = true;
         let ignore_unencodeable = true;
